@@ -22,6 +22,8 @@ W	tplib_parts_text(struct tplib_parts_struct *p, UW cmd)
 	switch (cmd & TPLIB_CMD_MASK) {
 		default:
 			return TPLIB_CONTINUE;
+		case	TPLIB_CMD_REDRAWPART:
+			gfil_rec(p->left, p->top, p->left + p->width, p->top + p->height, TPLIB_BGCOLOR);
 		case	TPLIB_CMD_REDRAW:
 			break;
 	}
@@ -43,6 +45,8 @@ W	tplib_parts_dec(struct tplib_parts_struct *p, UW cmd)
 	switch (cmd & TPLIB_CMD_MASK) {
 		default:
 			return TPLIB_CONTINUE;
+		case	TPLIB_CMD_REDRAWPART:
+			gfil_rec(p->left, p->top, p->left + p->width, p->top + p->height, TPLIB_BGCOLOR);
 		case	TPLIB_CMD_REDRAW:
 			break;
 	}
@@ -114,6 +118,7 @@ W	tplib_parts_buttonalt(struct tplib_parts_struct *p, UW cmd)
 			gfil_rec(p->left, p->top + p->height - 2, p->left + p->width, p->top + p->height, TPLIB_PARTSFGCOLOR);
 			x = p->width - gget_stw(TPLIB_FONT12, (UB*)p->config);
 			gdra_stp(p->left + x / 2, p->top + p->height - 4, TPLIB_PARTSCHARCOLOR, TPLIB_PARTSBGCOLOR, TPLIB_FONT12, (UB*)p->config);
+		case	TPLIB_CMD_REDRAWPART:
 			gfil_rec(p->left + 6, p->top + 3, p->left + p->width - 6, p->top + 7, (v)? TPLIB_PARTSONCOLOR : TPLIB_PARTSOFFCOLOR);
 			return TPLIB_CONTINUE;
 		case	TPLIB_CMD_PRESS:
@@ -134,7 +139,7 @@ W	tplib_parts_buttonalt(struct tplib_parts_struct *p, UW cmd)
 
 W	tplib_proc(struct tplib_parts_struct *list, UW cmd)
 {
-	static	W	redraw = 1;
+	static	W	redraw = 2;
 	struct	tplib_parts_struct	*p;
 	W	x, y;
 	
@@ -143,7 +148,10 @@ W	tplib_proc(struct tplib_parts_struct *list, UW cmd)
 	
 	switch (cmd & TPLIB_CMD_MASK) {
 		case	TPLIB_CMD_REDRAW:
-			redraw = 1;
+			redraw |= 2;
+			return TPLIB_CONTINUE;
+		case	TPLIB_CMD_REDRAWPART:
+			redraw |= 1;
 			return TPLIB_CONTINUE;
 	}
 	if (list == NULL)
@@ -171,12 +179,12 @@ W	tplib_proc(struct tplib_parts_struct *list, UW cmd)
 		}
 	}
 	if ((redraw)) {
-		redraw = 0;
 		p = list;
 		while ((p->parts)) {
-			p->parts(p, TPLIB_CMD_REDRAW);
+			p->parts(p, (redraw & 2)? TPLIB_CMD_REDRAW : TPLIB_CMD_REDRAWPART);
 			p++;
 		}
+		redraw = 0;
 	}
 	switch (cmd & TPLIB_CMD_MASK) {
 		case	TPLIB_CMD_PRESS:

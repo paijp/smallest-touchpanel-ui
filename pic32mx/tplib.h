@@ -19,6 +19,7 @@ struct	tplib_parts_struct {
 
 #define	TPLIB_CMD_CHANGE	0x20000000
 #define	TPLIB_CMD_REDRAW	0x40000000
+#define	TPLIB_CMD_REDRAWPART	0x41000000
 
 W	tplib_parts_fill(struct tplib_parts_struct *p, UW cmd);
 W	tplib_parts_text(struct tplib_parts_struct *p, UW cmd);

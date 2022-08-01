@@ -43,11 +43,11 @@ static	W	proc_tenkey(struct tplib_parts_struct *p, UW cmd)
 				if (val > 99999999)
 					continue;
 				val = val * 10 + ret;
-				tplib_proc(NULL, TPLIB_CMD_REDRAW);		/* draw myself */
+				tplib_proc(NULL, TPLIB_CMD_REDRAWPART);		/* draw myself */
 				continue;
 			case	-1:		/* <- */
 				val /= 10;
-				tplib_proc(NULL, TPLIB_CMD_REDRAW);		/* draw myself */
+				tplib_proc(NULL, TPLIB_CMD_REDRAWPART);		/* draw myself */
 				continue;
 			case	-2:		/* cancel */
 				tplib_proc(NULL, TPLIB_CMD_REDRAW);		/* draw parent screen */
