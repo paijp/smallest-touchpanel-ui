@@ -4,7 +4,7 @@ Sorry, under construction.
 
 Type "make sample1" on directory x11/ to build.
 
-Type "make sample1.hex" on dicectory pic32mx/ to build.
+Type "make sample1.hex" on directory pic32mx/ to build.
 
 Pin map: https://paijp.github.io/smallest-touchpanel-ui/pic32mx/lcdtp_port.html
 
