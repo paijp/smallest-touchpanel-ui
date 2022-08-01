@@ -24,7 +24,9 @@ static	W	proc_tenkey(struct tplib_parts_struct *p, UW cmd)
 		{NULL}
 	};
 	
-	if ((p->ppar))
+	if (p == NULL)
+		val = 0;
+	else if ((p->ppar))
 		val = *((W*)p->ppar);
 	else
 		val = p->par;
@@ -51,11 +53,13 @@ static	W	proc_tenkey(struct tplib_parts_struct *p, UW cmd)
 				tplib_proc(NULL, TPLIB_CMD_REDRAW);		/* draw parent screen */
 				return TPLIB_CONTINUE;
 			case	-3:		/* ok */
+				tplib_proc(NULL, TPLIB_CMD_REDRAW);		/* draw parent screen */
+				if (p == NULL)
+					return val;
 				if ((p->ppar))
 					*((W*)p->ppar) = val;
 				else
 					p->par = val;
-				tplib_proc(NULL, TPLIB_CMD_REDRAW);		/* draw parent screen */
 				return p->par;
 		}
 	}
