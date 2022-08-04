@@ -16,6 +16,7 @@
 #define	LCD_W	240
 #define	LCD_H	320
 
+void	dly_tsk(W ms);
 void	gfil_rec(W l, W t, W r, W b, UW color16);
 void	gdra_stp(W x, W y, UW color16, UW bgcolor16, W font, const UB *s);
 W	gget_stw(W font, const UB *s);

@@ -229,12 +229,10 @@ static	void	wait1ms(void)
 }
 
 
-static	void	wait200ms(void)
+void	dly_tsk(W ms)
 {
-	int	l;
-	
-	for (l=3000000; l>0; l--)
-		asm("nop");
+	while (ms-- > 0)
+		wait1ms();
 }
 
 
@@ -631,7 +629,7 @@ void	init_lcdtp(void)
 	lcd_write(0x11);
 	lcd_wait();
 	
-	wait200ms();
+	dly_tsk(200);
 	
 	lcd_write(0x29);
 	lcd_write(0x2c);
@@ -640,7 +638,7 @@ void	init_lcdtp(void)
 	
 	LAT_LSS = 1;
 	
-	wait200ms();
+	dly_tsk(200);
 	
 	LAT_LSS = 0;
 	LAT_LRS = 0;

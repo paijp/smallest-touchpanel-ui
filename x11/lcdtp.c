@@ -134,6 +134,12 @@ static	const	UB	font12n[0x60][12] = {
 };
 
 
+void	dly_tsk(W ms)
+{
+	usleep(1000 * ms);
+}
+
+
 static	void	update_lcd()
 {
 	XPutImage(xd0, xw0, gc0, xi0, 0, 0, 0, 0, LCD_W, LCD_H);
@@ -275,7 +281,7 @@ void	init_lcdtp()
 	XMapSubwindows(xd0, xw0);
 	XMapWindow(xd0, xw0);
 	update_lcd();
-	usleep(500 * 1000);
+	dly_tsk(500);
 }
 
 
@@ -305,7 +311,7 @@ int	main(int ac, char **av)
 #if 0
 	for (;;) {
 		if ((y = gettp()) == 0) {
-			usleep(100 * 1000);
+			dly_tsk(100);
 			continue;
 		}
 		x = y >> 12;
@@ -315,7 +321,7 @@ int	main(int ac, char **av)
 	}
 #else
 	while (gettp() == 0)
-		usleep(100 * 1000);
+		dly_tsk(100);
 #endif
 	
 	return 0;
