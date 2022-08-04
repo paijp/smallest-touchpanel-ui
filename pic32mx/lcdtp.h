@@ -1,4 +1,13 @@
 
+/*
+	Smallest touchpanel UI https://github.com/paijp/smallest-touchpanel-ui
+
+	Copyright (c) 2022 paijp
+
+	This software is released under the Apache 2.0 license.
+	http://www.apache.org/licenses/
+*/
+
 #include	"basic.h"
 
 
