@@ -20,6 +20,8 @@
 
 #include	"lcdtp.h"
 
+UW	lcdtp_flip = 0;
+
 static	Display	*xd0;
 static	Window	xw0;
 static	GC	gc0;
@@ -242,6 +244,7 @@ W	gget_stw(W font, const UB *s)
 
 UW	gettp()
 {
+	W	x, y;
 	XEvent	ev0;
 	
 	for (;;) {
@@ -250,7 +253,15 @@ UW	gettp()
 		
 		switch (ev0.type) {
 			case	ButtonPress:
-				return TPLIB_CMD_PRESS | (ev0.xbutton.x << 12) | ev0.xbutton.y;
+				if ((lcdtp_flip & LCDTP_FLIP_X))
+					x = LCD_W - 1 - ev0.xbutton.x;
+				else
+					x = ev0.xbutton.x;
+				if ((lcdtp_flip & LCDTP_FLIP_Y))
+					y = LCD_H - 1 - ev0.xbutton.y;
+				else
+					y = ev0.xbutton.y;
+				return TPLIB_CMD_PRESS | (x << 12) | y;
 			case	Expose:
 				update_lcd();
 				break;

@@ -36,6 +36,7 @@ W	tplib_parts_dec(struct tplib_parts_struct *p, UW cmd);
 W	tplib_parts_button(struct tplib_parts_struct *p, UW cmd);
 W	tplib_parts_buttonalt(struct tplib_parts_struct *p, UW cmd);
 W	tplib_proc(struct tplib_parts_struct *p, UW cmd);
+W	tplib_setupflip(void *message);
 
 #define	TPLIB_BGCOLOR	0x0000
 #define	TPLIB_CHARCOLOR	0xffff

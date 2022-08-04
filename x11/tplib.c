@@ -111,6 +111,21 @@ W	tplib_parts_button(struct tplib_parts_struct *p, UW cmd)
 }
 
 
+W	tplib_parts_buttonhidden(struct tplib_parts_struct *p, UW cmd)
+{
+	switch (cmd & TPLIB_CMD_MASK) {
+		default:
+			return TPLIB_CONTINUE;
+		case	TPLIB_CMD_PRESS:
+			break;
+	}
+	
+	if ((p->fn))
+		return p->fn(p, TPLIB_CMD_CHANGE);
+	return p->par;
+}
+
+
 W	tplib_parts_buttonalt(struct tplib_parts_struct *p, UW cmd)
 {
 	W	x, v;
@@ -217,4 +232,44 @@ W	tplib_proc(struct tplib_parts_struct *list, UW cmd)
 	}
 	return TPLIB_CONTINUE;
 }
+
+
+W	tplib_config2ppar(struct tplib_parts_struct *p, UW cmd)
+{
+	void	**q, *r;
+	
+	if ((q = p->config) == NULL)
+		p->ppar = NULL;
+	else if ((r = *q) == NULL)
+		p->ppar = NULL;
+	else
+		p->ppar = r;
+	return TPLIB_CONTINUE;
+}
+
+
+W	tplib_setupflip(void *message)
+{
+#ifdef	LCDTP_FLIP_X
+	static	UB	*s;
+	static	struct	tplib_parts_struct	parts[] = {
+		{tplib_parts_fill, 0, 0, LCD_W, LCD_H, 0x0000, NULL, NULL, NULL, 0}, 
+		{tplib_parts_buttonhidden, LCD_W / 16, LCD_H / 8, LCD_W * 3 / 8, LCD_H / 4, LCDTP_FLIP_X | LCDTP_FLIP_Y, NULL, NULL, NULL, 0}, 
+		{tplib_parts_buttonhidden, LCD_W * 9 / 16, LCD_H / 8, LCD_W * 3 / 8, LCD_H / 4, LCDTP_FLIP_Y, NULL, NULL, NULL, 0}, 
+		{tplib_parts_buttonhidden, LCD_W / 16, LCD_H * 5 / 8, LCD_W * 3 / 8, LCD_H / 4, LCDTP_FLIP_X, NULL, NULL, NULL, 0}, 
+		{tplib_parts_button, LCD_W * 9 / 16, LCD_H * 5 / 8, LCD_W * 3 / 8, LCD_H / 4, 0, NULL, NULL, "->", 0}, 
+		{tplib_parts_text, LCD_W / 8, LCD_H * 3 / 8, LCD_W * 3 / 4, 24, TPLIB_CHARCOLOR, NULL, tplib_config2ppar, &s, 0}, 
+		{NULL}
+	};
+	s = message;
+	
+	tplib_proc(NULL, TPLIB_CMD_REDRAW);
+	while ((lcdtp_flip = tplib_proc(parts, gettp())) == TPLIB_CONTINUE)
+		;
+	
+	tplib_proc(NULL, TPLIB_CMD_REDRAW);
+#endif
+	return TPLIB_CONTINUE;
+}
+
 

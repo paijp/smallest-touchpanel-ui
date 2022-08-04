@@ -70,9 +70,7 @@ VUSB3V3	RB12
 #define	PORT_A6	PORTBbits.RB15
 
 
-#define	LCD_W	240
-#define	LCD_H	320
-
+UW	lcdtp_flip = 0;
 
 static	const	UB	font12n[0x60][12] = {
 		/* 0x20 */
@@ -702,7 +700,7 @@ UW	gettp()
 	
 	x = (0x7800 - x) * LCD_W / 0x7000;
 	y = (y - 0x800) * LCD_H / 0x7000;
-
+	
 	if (x < 0)
 		x = 0;
 	if (x >= LCD_W)
@@ -711,6 +709,11 @@ UW	gettp()
 		y = 0;
 	if (y >= LCD_H)
 		y = LCD_H - 1;
+	
+	if ((lcdtp_flip & LCDTP_FLIP_X))
+		x = LCD_W - 1 - x;
+	if ((lcdtp_flip & LCDTP_FLIP_Y))
+		y = LCD_H - 1 - y;
 	
 	return TPLIB_CMD_PRESS | (x << 12) | y;
 }
