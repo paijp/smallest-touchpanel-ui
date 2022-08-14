@@ -167,6 +167,56 @@ W	tplib_parts_buttonalt(struct tplib_parts_struct *p, UW cmd)
 }
 
 
+W	tplib_alwaysselect(struct tplib_parts_struct *p, UW cmd)
+{
+	W	v;
+	
+	if (p->ppar == NULL)
+		return TPLIB_CONTINUE;
+	v = *((W*)p->ppar);
+	if (v == p->par)
+		return p->par;		/* change to me */
+	*((W*)p->ppar) = p->par;
+	return TPLIB_CONTINUE;
+}
+
+
+W	tplib_parts_buttongroup(struct tplib_parts_struct *p, UW cmd)
+{
+	W	x, v, ret;
+	
+	if (p->ppar == NULL)
+		return TPLIB_CONTINUE;
+	
+	v = *((W*)p->ppar);
+	switch (cmd & TPLIB_CMD_MASK) {
+		default:
+			return TPLIB_CONTINUE;
+		case	TPLIB_CMD_REDRAW:
+			gfil_rec(p->left, p->top, p->left + p->width, p->top + p->height - 2, TPLIB_PARTSBGCOLOR);
+			gfil_rec(p->left, p->top + p->height - 2, p->left + p->width, p->top + p->height, TPLIB_PARTSFGCOLOR);
+			x = p->width - gget_stw(TPLIB_FONT12, (UB*)p->config);
+			gdra_stp(p->left + x / 2, p->top + p->height - 4, TPLIB_PARTSCHARCOLOR, TPLIB_PARTSBGCOLOR, TPLIB_FONT12, (UB*)p->config);
+		case	TPLIB_CMD_REDRAWPART:
+			gfil_rec(p->left + 6, p->top + 3, p->left + p->width - 6, p->top + 7, (v == p->par)? TPLIB_PARTSONCOLOR : TPLIB_PARTSOFFCOLOR);
+			return TPLIB_CONTINUE;
+		case	TPLIB_CMD_PRESS:
+			break;
+	}
+	
+	if (v != p->par)
+		*((W*)p->ppar) = ret = p->par;
+	else
+		*((W*)p->ppar) = ret = TPLIB_CONTINUE;
+	ret = p->par;
+	if ((p->fn))
+		ret = p->fn(p, TPLIB_CMD_CHANGE);
+	v = *((W*)p->ppar);
+	tplib_proc(NULL, TPLIB_CMD_REDRAWPART);
+	return ret;
+}
+
+
 W	tplib_proc(struct tplib_parts_struct *list, UW cmd)
 {
 	static	W	redraw = 2;

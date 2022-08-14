@@ -35,6 +35,8 @@ W	tplib_parts_text(struct tplib_parts_struct *p, UW cmd);
 W	tplib_parts_dec(struct tplib_parts_struct *p, UW cmd);
 W	tplib_parts_button(struct tplib_parts_struct *p, UW cmd);
 W	tplib_parts_buttonalt(struct tplib_parts_struct *p, UW cmd);
+W	tplib_alwaysselect(struct tplib_parts_struct *p, UW cmd);
+W	tplib_parts_buttongroup(struct tplib_parts_struct *p, UW cmd);
 W	tplib_proc(struct tplib_parts_struct *p, UW cmd);
 W	tplib_setupflip(void *message);
 
