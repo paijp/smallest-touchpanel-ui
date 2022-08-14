@@ -128,7 +128,7 @@ W	tplib_parts_buttonhidden(struct tplib_parts_struct *p, UW cmd)
 
 W	tplib_parts_buttonalt(struct tplib_parts_struct *p, UW cmd)
 {
-	W	x, v;
+	W	x, v, ret;
 	
 	if ((p->ppar))
 		v = *((W*)p->ppar);
@@ -154,10 +154,16 @@ W	tplib_parts_buttonalt(struct tplib_parts_struct *p, UW cmd)
 		*((W*)p->ppar) = v;
 	else
 		p->par = v;
+	ret = p->par;
+	if ((p->fn)) {
+		ret = p->fn(p, TPLIB_CMD_CHANGE);
+		if ((p->ppar))
+			v = *((W*)p->ppar);
+		else
+			v = p->par;
+	}
 	gfil_rec(p->left + 6, p->top + 3, p->left + p->width - 6, p->top + 7, (v)? TPLIB_PARTSONCOLOR : TPLIB_PARTSOFFCOLOR);
-	if ((p->fn))
-		return p->fn(p, TPLIB_CMD_CHANGE);
-	return p->par;
+	return ret;
 }
 
 
