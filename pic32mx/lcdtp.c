@@ -71,6 +71,7 @@ VUSB3V3	RB12
 
 
 UW	lcdtp_flip = 0;
+void	(*polltask)() = NULL;
 
 static	const	UB	font12n[0x60][12] = {
 		/* 0x20 */
@@ -218,34 +219,49 @@ static	void	wait10us(void)
 #endif
 
 
-static	void	wait1ms(void)
+static	void	wait100us(void)
 {
 	long	l;
 	
-	for (l=15000; l>0; l--)
+	if ((polltask))
+		polltask();
+	
+	for (l=1500; l>0; l--)
 		asm("nop");
 }
 
 
 void	dly_tsk(W ms)
 {
+	ms *= 10;
 	while (ms-- > 0)
-		wait1ms();
+		wait100us();
 }
 
 
 static	void	lcd_wait()
 {
 	while (SPI1STATbits.SRMT == 0)
-		;
+		if ((polltask))
+			polltask();
 }
 
 
 static	void	lcd_write(UB v)
 {
 	
+	if ((polltask)) {
+		static	W	count = 0;
+		
+		if (count-- <= 0) {
+			count = 200;
+			polltask();
+		}
+	}
+	
 	while ((SPI1STATbits.SPITBF))
-		;
+		if ((polltask))
+			polltask();
 	SPI1BUF = v;
 	return;
 }
@@ -254,6 +270,9 @@ static	void	lcd_write(UB v)
 static	W	gettpinner(UW cmd)
 {
 	W	i, ret;
+	
+	if ((polltask))
+		polltask();
 	
 	LAT_LSS = 1;
 	
@@ -338,6 +357,9 @@ void	gfil_rec(W l, W t, W r, W b, UW color)
 {
 	W	i;
 	
+	if ((polltask))
+		polltask();
+	
 	if (l < 0)
 		l = 0;
 	if (r > LCD_W)
@@ -395,6 +417,9 @@ void	gfil_rec(W l, W t, W r, W b, UW color)
 void	gdra_stp(W x, W y, UW color, UW bgcolor, W font, const UB *s)
 {
 	W	c, len, y0;
+	
+	if ((polltask))
+		polltask();
 	
 	if (s == NULL)
 		return;
@@ -474,6 +499,9 @@ W	gget_stw(W font, const UB *s)
 {
 	W	len;
 	
+	if ((polltask))
+		polltask();
+	
 	len = 0;
 	while ((*(s++)))
 		len += 8;
@@ -508,7 +536,7 @@ void	init_lcdtp(void)
 	/* ref http://www.lcdwiki.com/res/Program/Common_SPI/2.8inch/SPI_ILI9341_MSP2807_V1.1/2.8inch_SPI_Module_ILI9341_MSP2807_V1.1.zip */
 	
 	LAT_LSS = 0;
-	wait1ms();
+	dly_tsk(1);
 	LAT_LRS = 0;
 	lcd_write(0xcb);
 	lcd_wait();
@@ -568,7 +596,7 @@ void	init_lcdtp(void)
 	lcd_wait();
 	LAT_LRS = 1;
 	lcd_write(0x23);
-	lcd_wait();;
+	lcd_wait();
 	
 	LAT_LRS = 0;
 	lcd_write(0xc1);

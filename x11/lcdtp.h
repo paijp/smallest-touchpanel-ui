@@ -20,6 +20,8 @@ extern	UW	lcdtp_flip;
 #define	LCDTP_FLIP_X	1
 #define	LCDTP_FLIP_Y	2
 
+extern	void	(*polltask)();
+
 void	dly_tsk(W ms);
 void	gfil_rec(W l, W t, W r, W b, UW color16);
 void	gdra_stp(W x, W y, UW color16, UW bgcolor16, W font, const UB *s);

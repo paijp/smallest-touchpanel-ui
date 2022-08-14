@@ -21,6 +21,7 @@
 #include	"lcdtp.h"
 
 UW	lcdtp_flip = 0;
+void	(*polltask)() = NULL;
 
 static	Display	*xd0;
 static	Window	xw0;
@@ -138,12 +139,16 @@ static	const	UB	font12n[0x60][12] = {
 
 void	dly_tsk(W ms)
 {
+	if ((polltask))
+		polltask();
 	usleep(1000 * ms);
 }
 
 
 static	void	update_lcd()
 {
+	if ((polltask))
+		polltask();
 	XPutImage(xd0, xw0, gc0, xi0, 0, 0, 0, 0, LCD_W, LCD_H);
 	XFlush(xd0);
 }
@@ -248,6 +253,8 @@ UW	gettp()
 	XEvent	ev0;
 	
 	for (;;) {
+		if ((polltask))
+			polltask();
 		if (!XCheckMaskEvent(xd0, ButtonPressMask, &ev0))
 			return TPLIB_CMD_NULL;
 		
