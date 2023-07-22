@@ -217,6 +217,68 @@ W	tplib_parts_buttongroup(struct tplib_parts_struct *p, UW cmd)
 }
 
 
+W	tplib_parts_sliderv(struct tplib_parts_struct *p, UW cmd)
+{
+	W	v, ret;
+	
+	switch (cmd & TPLIB_CMD_MASK) {
+		default:
+			if ((p->ppar))
+				v = *((W*)p->ppar);
+			else
+				v = p->par;
+			break;
+		case	TPLIB_CMD_PRESS:
+		case	TPLIB_CMD_PRESSING:
+			v = p->top + p->height - (cmd & 0xfff) - 1;
+			break;
+	}
+	if (v > p->height - 1)
+		v = p->height - 1;
+	if (v < 0)
+		v = 0;
+	
+	ret = TPLIB_CONTINUE;
+	switch (cmd & TPLIB_CMD_MASK) {
+		case	TPLIB_CMD_PRESS:
+		case	TPLIB_CMD_PRESSING:
+			if ((p->ppar))
+				*((W*)p->ppar) = v;
+			else
+				p->par = v;
+			ret = p->par;
+			
+			if ((p->fn)) {
+				ret = p->fn(p, TPLIB_CMD_CHANGE);
+				if ((p->ppar))
+					v = *((W*)p->ppar);
+				else
+					v = p->par;
+				if (v > p->height - 1)
+					v = p->height - 1;
+				if (v < 0)
+					v = 0;
+			}
+			
+		case	TPLIB_CMD_REDRAW:
+		case	TPLIB_CMD_REDRAWPART:
+			gfil_rec(p->left, p->top, p->left + p->width, p->top + p->height, TPLIB_PARTSBGCOLOR);
+			gfil_rec(p->left + p->width / 2 - 1, p->top, p->left + p->width / 2 + 1, p->top + p->height, TPLIB_PARTSFGCOLOR);
+			gfil_rec(p->left, p->top + p->height - v - 1, p->left + p->width, p->top + p->height - v, TPLIB_PARTSONCOLOR);
+			break;
+	}
+	
+	return ret;
+}
+
+
+W	tplib_proc_redraw(struct tplib_parts_struct *p, UW cmd)
+{
+	tplib_proc(NULL, TPLIB_CMD_REDRAWPART);		/* draw myself */
+	return TPLIB_CONTINUE;
+}
+
+
 W	tplib_proc(struct tplib_parts_struct *list, UW cmd)
 {
 	static	W	redraw = 2;
@@ -268,6 +330,7 @@ W	tplib_proc(struct tplib_parts_struct *list, UW cmd)
 	}
 	switch (cmd & TPLIB_CMD_MASK) {
 		case	TPLIB_CMD_PRESS:
+		case	TPLIB_CMD_PRESSING:
 			p = list;
 			while ((p->parts)) {
 				W	ret;
