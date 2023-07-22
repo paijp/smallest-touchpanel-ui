@@ -2,7 +2,7 @@
 /*
 	Smallest touchpanel UI https://github.com/paijp/smallest-touchpanel-ui
 
-	Copyright (c) 2022 paijp
+	Copyright (c) 2022-2023 paijp
 
 	This software is released under the Apache 2.0 license.
 	http://www.apache.org/licenses/
@@ -39,6 +39,7 @@ W	tplib_alwaysselect(struct tplib_parts_struct *p, UW cmd);
 W	tplib_parts_buttongroup(struct tplib_parts_struct *p, UW cmd);
 W	tplib_proc(struct tplib_parts_struct *p, UW cmd);
 W	tplib_setupflip(void *message);
+W	tplib_proc_tenkey(struct tplib_parts_struct *p, UW cmd);
 
 #define	TPLIB_BGCOLOR	0x0000
 #define	TPLIB_CHARCOLOR	0xffff
