@@ -814,6 +814,8 @@ void	init_lcdtp(void)
 	lcd_write(0x2c);
 	lcd_wait();
 	LAT_LRS = 1;
+	
+	gettp();
 }
 
 
