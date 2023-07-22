@@ -32,6 +32,7 @@ void	init_lcdtp();
 #define	TPLIB_CMD_MASK	0xff000000
 #define	TPLIB_CMD_NULL	0
 #define	TPLIB_CMD_PRESS	0x10000000		/* 10xxxyyy */
+#define	TPLIB_CMD_PRESSING	0x11000000		/* 10xxxyyy */
 
 #define	TPLIB_FONT12	0
 

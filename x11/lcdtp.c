@@ -249,17 +249,25 @@ W	gget_stw(W font, const UB *s)
 
 UW	gettp()
 {
-	W	x, y;
+	static	W	ispress = 1;
+	W	x, y, type;
 	XEvent	ev0;
 	
 	for (;;) {
 		if ((lcdtp_polltask))
 			lcdtp_polltask();
-		if (!XCheckMaskEvent(xd0, ButtonPressMask, &ev0))
+		if (!XCheckMaskEvent(xd0, ButtonPressMask|ButtonReleaseMask|Button1MotionMask, &ev0))
 			return TPLIB_CMD_NULL;
 		
+		type = TPLIB_CMD_PRESS;
 		switch (ev0.type) {
+			case	MotionNotify:
+				if (ispress == 0)
+					break;
+				type = TPLIB_CMD_PRESSING;
+				
 			case	ButtonPress:
+				ispress = 1;
 				if ((lcdtp_flip & LCDTP_FLIP_X))
 					x = LCD_W - 1 - ev0.xbutton.x;
 				else
@@ -268,7 +276,10 @@ UW	gettp()
 					y = LCD_H - 1 - ev0.xbutton.y;
 				else
 					y = ev0.xbutton.y;
-				return TPLIB_CMD_PRESS | (x << 12) | y;
+				return type | (x << 12) | y;
+			case	ButtonRelease:
+				ispress = 0;
+				break;
 			case	Expose:
 				update_lcd();
 				break;
@@ -295,7 +306,7 @@ void	init_lcdtp()
 		XSetWMName(xd0, xw0, &win_name);
 	}
 	gc0 = XCreateGC(xd0, xw0, 0, 0);
-	XSelectInput(xd0, xw0, ExposureMask|ButtonPressMask);
+	XSelectInput(xd0, xw0, ExposureMask|ButtonPressMask|ButtonReleaseMask|Button1MotionMask);
 	XMapSubwindows(xd0, xw0);
 	XMapWindow(xd0, xw0);
 	update_lcd();

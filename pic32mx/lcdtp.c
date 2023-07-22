@@ -822,7 +822,7 @@ void	init_lcdtp(void)
 UW	gettp()
 {
 	static	W	pressed = 1;
-	W	x, y;
+	W	x, y, type;
 	UW	z0, z1;
 	
 	z0 = gettpinner(0xb0);
@@ -851,9 +851,6 @@ UW	gettp()
 			pressed = 0;
 		return TPLIB_CMD_NULL;
 	}
-	if ((pressed))
-		return TPLIB_CMD_NULL;
-	pressed = 1;
 	
 	x = (0x7800 - x) * LCD_W / 0x7000;
 	y = (y - 0x800) * LCD_H / 0x7000;
@@ -872,7 +869,12 @@ UW	gettp()
 	if ((lcdtp_flip & LCDTP_FLIP_Y))
 		y = LCD_H - 1 - y;
 	
-	return TPLIB_CMD_PRESS | (x << 12) | y;
+	type = TPLIB_CMD_PRESS;
+	if ((pressed))
+		type = TPLIB_CMD_PRESSING;
+	pressed = 1;
+	
+	return type | (x << 12) | y;
 }
 
 
