@@ -2,7 +2,7 @@
 /*
 	Smallest touchpanel UI https://github.com/paijp/smallest-touchpanel-ui
 
-	Copyright (c) 2022 paijp
+	Copyright (c) 2022-2023 paijp
 
 	This software is released under the Apache 2.0 license.
 	http://www.apache.org/licenses/
@@ -29,15 +29,15 @@
 #endif
 
 
-extern	void	(*polltask)();		/* lcdtp.c */
+extern	void	(*lcdtp_polltask)();		/* lcdtp.c */
 
 
 static	void	wait10us(void)
 {
 	long    l;
 	
-	if ((polltask))
-		polltask();
+	if ((lcdtp_polltask))
+		lcdtp_polltask();
 	
 	for (l=150; l>0; l--)
 		asm("nop");

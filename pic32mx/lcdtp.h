@@ -2,7 +2,7 @@
 /*
 	Smallest touchpanel UI https://github.com/paijp/smallest-touchpanel-ui
 
-	Copyright (c) 2022 paijp
+	Copyright (c) 2022-2023 paijp
 
 	This software is released under the Apache 2.0 license.
 	http://www.apache.org/licenses/
@@ -20,7 +20,7 @@ extern	UW	lcdtp_flip;
 #define	LCDTP_FLIP_X	1
 #define	LCDTP_FLIP_Y	2
 
-extern	void	(*polltask)();
+extern	void	(*lcdtp_polltask)();
 
 void	dly_tsk(W ms);
 void	gfil_rec(W l, W t, W r, W b, UW color16);

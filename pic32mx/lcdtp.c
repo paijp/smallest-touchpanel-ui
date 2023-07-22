@@ -194,7 +194,7 @@ P6	RPB2
 
 
 UW	lcdtp_flip = 0;
-void	(*polltask)() = NULL;
+void	(*lcdtp_polltask)() = NULL;
 
 static	const	UB	font12n[0x60][12] = {
 		/* 0x20 */
@@ -346,8 +346,8 @@ static	void	wait100us(void)
 {
 	long	l;
 	
-	if ((polltask))
-		polltask();
+	if ((lcdtp_polltask))
+		lcdtp_polltask();
 	
 	for (l=1500; l>0; l--)
 		asm("nop");
@@ -365,26 +365,26 @@ void	dly_tsk(W ms)
 static	void	lcd_wait()
 {
 	while (SPI1STATbits.SRMT == 0)
-		if ((polltask))
-			polltask();
+		if ((lcdtp_polltask))
+			lcdtp_polltask();
 }
 
 
 static	void	lcd_write(UB v)
 {
 	
-	if ((polltask)) {
+	if ((lcdtp_polltask)) {
 		static	W	count = 0;
 		
 		if (count-- <= 0) {
 			count = 200;
-			polltask();
+			lcdtp_polltask();
 		}
 	}
 	
 	while ((SPI1STATbits.SPITBF))
-		if ((polltask))
-			polltask();
+		if ((lcdtp_polltask))
+			lcdtp_polltask();
 	SPI1BUF = v;
 	return;
 }
@@ -394,8 +394,8 @@ static	W	gettpinner(UW cmd)
 {
 	W	i, ret;
 	
-	if ((polltask))
-		polltask();
+	if ((lcdtp_polltask))
+		lcdtp_polltask();
 	
 	LAT_LSS = 1;
 	
@@ -480,8 +480,8 @@ void	gfil_rec(W l, W t, W r, W b, UW color)
 {
 	W	i;
 	
-	if ((polltask))
-		polltask();
+	if ((lcdtp_polltask))
+		lcdtp_polltask();
 	
 	if (l < 0)
 		l = 0;
@@ -541,8 +541,8 @@ void	gdra_stp(W x, W y, UW color, UW bgcolor, W font, const UB *s)
 {
 	W	c, len, y0;
 	
-	if ((polltask))
-		polltask();
+	if ((lcdtp_polltask))
+		lcdtp_polltask();
 	
 	if (s == NULL)
 		return;
@@ -622,8 +622,8 @@ W	gget_stw(W font, const UB *s)
 {
 	W	len;
 	
-	if ((polltask))
-		polltask();
+	if ((lcdtp_polltask))
+		lcdtp_polltask();
 	
 	len = 0;
 	while ((*(s++)))

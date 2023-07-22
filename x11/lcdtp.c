@@ -2,7 +2,7 @@
 /*
 	Smallest touchpanel UI https://github.com/paijp/smallest-touchpanel-ui
 
-	Copyright (c) 2022 paijp
+	Copyright (c) 2022-2023 paijp
 
 	This software is released under the Apache 2.0 license.
 	http://www.apache.org/licenses/
@@ -21,7 +21,7 @@
 #include	"lcdtp.h"
 
 UW	lcdtp_flip = 0;
-void	(*polltask)() = NULL;
+void	(*lcdtp_polltask)() = NULL;
 
 static	Display	*xd0;
 static	Window	xw0;
@@ -139,16 +139,16 @@ static	const	UB	font12n[0x60][12] = {
 
 void	dly_tsk(W ms)
 {
-	if ((polltask))
-		polltask();
+	if ((lcdtp_polltask))
+		lcdtp_polltask();
 	usleep(1000 * ms);
 }
 
 
 static	void	update_lcd()
 {
-	if ((polltask))
-		polltask();
+	if ((lcdtp_polltask))
+		lcdtp_polltask();
 	XPutImage(xd0, xw0, gc0, xi0, 0, 0, 0, 0, LCD_W, LCD_H);
 	XFlush(xd0);
 }
@@ -253,8 +253,8 @@ UW	gettp()
 	XEvent	ev0;
 	
 	for (;;) {
-		if ((polltask))
-			polltask();
+		if ((lcdtp_polltask))
+			lcdtp_polltask();
 		if (!XCheckMaskEvent(xd0, ButtonPressMask, &ev0))
 			return TPLIB_CMD_NULL;
 		
