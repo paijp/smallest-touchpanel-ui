@@ -2,6 +2,12 @@
 
 Sorry, under construction.
 
+## Important changes.
+
+- polltask() -> lcdtp_polltask().
+
+## usage
+
 Type "make sample1" on directory x11/ to build.
 
 Type "make sample1.hex" on directory pic32mx/ to build.
