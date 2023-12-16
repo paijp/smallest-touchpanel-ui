@@ -19,7 +19,7 @@
 #pragma	config	DEBUG=OFF, JTAGEN=OFF, ICESEL=ICS_PGx2, PWP=OFF
 #pragma	config	BWP=OFF, CP=OFF
 
-/*map32mx
+/*jp.pa-i/map32mx2-28
 LSS	RPB3
 LRS_T2P	RPB4
 P9__SCL	RPA4
@@ -46,7 +46,11 @@ P5	RPB1
 P6	RPB2
 */
 
-/*cir-dip28 PIC32MX270F256B
+/*html
+<hr />
+*/
+
+/*jp.pa-i/cir dip28 PIC32MX270F256B
 22(442{r10k}2<<3V3>)2<MCLR>2{c104}2<<G>
 22<P2>
 22<P3>
@@ -77,7 +81,7 @@ P6	RPB2
 88<<3V3>8{c104}8<<G>
 */
 
-/*cir-sip14 MSP2807
+/*jp.pa-i/cir sip14 MSP2807
 22<<3V3>
 22<<G>
 22<LSS>
@@ -94,7 +98,7 @@ P6	RPB2
 2
 */
 
-/*cir-sip5 ICSP
+/*jp.pa-i/cir sip5 ICSP
 22<MCLR>
 22<<3V3>
 22<<G>
@@ -102,7 +106,7 @@ P6	RPB2
 22<PGC>
 */
 
-/*cir-dip20 CN2x10
+/*jp.pa-i/cir dip20 CN2x10
 22<P1__B2P2>
 22<P2>
 22<P3>
@@ -125,7 +129,11 @@ P6	RPB2
 88<DA1>
 */
 
-/*cir-dip14 MCP3424	# i2c:0x69
+/*html
+<hr />
+*/
+
+/*jp.pa-i/cir dip14 MCP3424	# i2c:0x69
 2
 2
 2
@@ -142,7 +150,7 @@ P6	RPB2
 88<AD2>
 */
 
-/*cir-dip14 MCP3424	# i2c:0x68
+/*jp.pa-i/cir dip14 MCP3424	# i2c:0x68
 2
 2
 2
@@ -159,7 +167,7 @@ P6	RPB2
 88<AD1>
 */
 
-/*cir-dip6 MCP4725	# i2c:0x60
+/*jp.pa-i/cir dip6 MCP4725	# i2c:0x60
 22<DA1>
 22<<G>
 22<<3V3>2{c104}2<<G>
