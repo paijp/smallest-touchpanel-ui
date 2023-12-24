@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.0.2] - 2023-12-24
+### Changed
+- Change diagram-in-comment description.
+
 ## [0.0.1] - 2023-12-16
 ### Added 
 - Create CHANGELOG.md

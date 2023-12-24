@@ -4,7 +4,7 @@ Sorry, under construction.
 
 ## Important changes.
 
-- polltask() -> lcdtp_polltask().
+- 2023/07/22 polltask() -> lcdtp_polltask().
 
 ## usage
 
