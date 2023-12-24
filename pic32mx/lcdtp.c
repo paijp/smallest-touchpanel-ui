@@ -19,7 +19,11 @@
 #pragma	config	DEBUG=OFF, JTAGEN=OFF, ICESEL=ICS_PGx2, PWP=OFF
 #pragma	config	BWP=OFF, CP=OFF
 
-/* usage: https://github.com/paijp/diagram-in-comment */
+
+/*jp.pa-i/html
+<a href="https://github.com/paijp/diagram-in-comment">How to generate this?</a>
+*/
+/* output: https://paijp.github.io/smallest-touchpanel-ui/pic32mx/lcdtp.c.html */
 
 /*jp.pa-i.cir/map32mx2-28
 LSS	RPB3
