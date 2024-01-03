@@ -2,7 +2,7 @@
 /*
 	Smallest touchpanel UI https://github.com/paijp/smallest-touchpanel-ui
 
-	Copyright (c) 2022-2023 paijp
+	Copyright (c) 2022-2024 paijp
 
 	This software is released under the Apache 2.0 license.
 	http://www.apache.org/licenses/
@@ -21,9 +21,9 @@
 
 
 /*jp.pa-i/html
-<a href="https://github.com/paijp/diagram-in-comment">How to generate this?</a>
+<p><a href="https://github.com/paijp/diagram-in-comment">How to generate this?</a></p>
 */
-/* output: https://paijp.github.io/smallest-touchpanel-ui/pic32mx/lcdtp.c.html */
+/* generated HTML: https://paijp.github.io/smallest-touchpanel-ui/pic32mx/lcdtp.html */
 
 /*jp.pa-i.cir/map32mx2-28
 LSS	RPB3
@@ -57,82 +57,82 @@ P6	RPB2
 */
 
 /*jp.pa-i.cir/cir dip28 PIC32MX270F256B
-22(442{r10k}2<<3V3>)2<MCLR>2{c104}2<<G>
-22<P2>
-22<P3>
-22<P4>
-22<P5>
-22<P6>
-22<LSS>2{d}2(2<RST_LED>)442{d}2<RYLED>
-22<<G>
-22<OSC1>
-22<OSC2>
-22<LRS_T2P>
-22<P9_SCL>
-22<<3V3>2{c106}2<<G>
-22<P2L_P2T>
+22(442{r10k}2[[3V3])2[MCLR]2{c104}2[[G]
+22[P2]
+22[P3]
+22[P4]
+22[P5]
+22[P6]
+22[LSS]2{d}2(2[RST_LED])442{d}2[RYLED]
+22[[G]
+22[OSC1]
+22[OSC2]
+22[LRS_T2P]
+22[P9_SCL]
+22[[3V3]2{c106}2[[G]
+22[P2L_P2T]
 8
-88<P19__TSS_SDA>8(448{d}8<RST_LED>)8{r10k}8<<3V3>
-88<P1__B2P2>
-88<P10__P2B2>
-888<<G>
-88{c106}8<<G>
-88<PGD>
-88<PGC>
-88<<3V3>
-88<B2P>8<P8__B2P1>
-88<LCK_TCK>
-88<P2B>8<P7__P2B1>
-88<<G>
-88<<3V3>8{c104}8<<G>
+88[P19__TSS_SDA]8(448{d}8[RST_LED])8{r10k}8[[3V3]
+88[P1__B2P2]
+88[P10__P2B2]
+888[[G]
+88{c106}8[[G]
+88[PGD]
+88[PGC]
+88[[3V3]
+88[B2P]8[P8__B2P1]
+88[LCK_TCK]
+88[P2B]8[P7__P2B1]
+88[[G]
+88[[3V3]8{c104}8[[G]
 */
 
 /*jp.pa-i.cir/cir sip14 MSP2807
-22<<3V3>
-22<<G>
-22<LSS>
-22<RST_LED>
-22<LRS_T2P>
-22<P2L_P2T>
-22<LCK_TCK>
-22<RST_LED>
+22[[3V3]
+22[[G]
+22[LSS]
+22[RST_LED]
+22[LRS_T2P]
+22[P2L_P2T]
+22[LCK_TCK]
+22[RST_LED]
 2
-22<LCK_TCK>
-22<P19__TSS_SDA>
-22<P2L_P2T>
-22<LRS_T2P>
+22[LCK_TCK]
+22[P19__TSS_SDA]
+22[P2L_P2T]
+22[LRS_T2P]
 2
 */
 
 /*jp.pa-i.cir/cir sip5 ICSP
-22<MCLR>
-22<<3V3>
-22<<G>
-22<PGD>
-22<PGC>
+22[MCLR]
+22[[3V3]
+22[[G]
+22[PGD]
+22[PGC]
 */
 
 /*jp.pa-i.cir/cir dip20 CN2x10
-22<P1__B2P2>
-22<P2>
-22<P3>
-22<P4>
-22<P5>
-22<P6>
-22<P7__P2B1>
-22<P8__B2P1>
-22<P9_SCL>
-22<P10__P2B2>
-88<(BAT)>
-88<P19__TSS_SDA>
-88<AD2>
-88<AD1>
-88<<3V3>
-88<(5V)>
-88<(5V)>
-88<<G>
-88<<G>
-88<DA1>
+22[P1__B2P2]
+22[P2]
+22[P3]
+22[P4]
+22[P5]
+22[P6]
+22[P7__P2B1]
+22[P8__B2P1]
+22[P9_SCL]
+22[P10__P2B2]
+88[(BAT)]
+88[P19__TSS_SDA]
+88[AD2]
+88[AD1]
+88[[3V3]
+88[(5V)]
+88[(5V)]
+88[[G]
+88[[G]
+88[DA1]
 */
 
 /*jp.pa-i/html
@@ -145,15 +145,15 @@ P6	RPB2
 2
 2
 2
-22<<G>
-22<P9_SCL>
-88<P19__TSS_SDA>
-88<<3V3>8{c104}8<<G>
-88<<G>
-88<<G>
-88<AD1>
-88<<G>
-88<AD2>
+22[[G]
+22[P9_SCL]
+88[P19__TSS_SDA]
+88[[3V3]8{c104}8[[G]
+88[[G]
+88[[G]
+88[AD1]
+88[[G]
+88[AD2]
 */
 
 /*jp.pa-i.cir/cir dip14 MCP3424	# i2c:0x68
@@ -163,23 +163,23 @@ P6	RPB2
 2
 2
 2
-22<P9_SCL>
-88<P19__TSS_SDA>
-88<<3V3>8{c104}8<<G>
-88<<G>
-88<<G>
-88<AD2>
-88<AD2>
-88<AD1>
+22[P9_SCL]
+88[P19__TSS_SDA]
+88[[3V3]8{c104}8[[G]
+88[[G]
+88[[G]
+88[AD2]
+88[AD2]
+88[AD1]
 */
 
 /*jp.pa-i.cir/cir dip6 MCP4725	# i2c:0x60
-22<DA1>
-22<<G>
-22<<3V3>2{c104}2<<G>
-88<P19__TSS_SDA>
-88<P9_SCL>
-88<<G>
+22[DA1]
+22[[G]
+22[[3V3]2{c104}2[[G]
+88[P19__TSS_SDA]
+88[P9_SCL]
+88[[G]
 */
 
 
