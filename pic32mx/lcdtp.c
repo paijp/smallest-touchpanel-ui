@@ -892,3 +892,86 @@ UW	gettp()
 }
 
 
+void	lcdtp_sendlogc(W c)
+{
+	static	W	first = 1;
+	
+	if ((first)) {
+		first = 0;
+		
+		RPB10R = 2;		/* UTX2 */
+		U2MODE = 0;
+		U2BRG = 86;		/* 115.4kbps */
+		U2MODE = 0x8008;	/* enable N81 4(U2BRG + 1) */
+		U2STA = 0x1400;
+	}
+	for (;;) {
+		if (U2STAbits.UTXBF == 0) {
+			U2TXREG = c;
+			return;
+		}
+		if ((lcdtp_polltask))
+			lcdtp_polltask();
+	}
+}
+
+
+void	lcdtp_sendlogs(const char *s)
+{
+	W	c;
+	
+	while ((c = *(s++)))
+		lcdtp_sendlogc(c);
+}
+
+
+void	lcdtp_sendlogdec(W v)
+{
+	if ((v < 0)) {
+		v = -v;
+		lcdtp_sendlogc('-');
+	}
+	if (v >= 10)
+		lcdtp_sendlogdec(v / 10);
+	lcdtp_sendlogc('0' + (v % 10));
+}
+
+
+void	lcdtp_sendlogun(UW v)
+{
+	static	const	char *bin2hex = "0123456789abcdef";
+	
+	lcdtp_sendlogc(bin2hex[v & 0xf]);
+}
+
+
+void	lcdtp_sendlogub(UW v)
+{
+	lcdtp_sendlogun(v >> 4);
+	lcdtp_sendlogun(v);
+}
+
+
+void	lcdtp_sendloguh(UW v)
+{
+	lcdtp_sendlogun(v >> 12);
+	lcdtp_sendlogun(v >> 8);
+	lcdtp_sendlogun(v >> 4);
+	lcdtp_sendlogun(v);
+}
+
+
+void	lcdtp_sendloguw(UW v)
+{
+	lcdtp_sendlogun(v >> 28);
+	lcdtp_sendlogun(v >> 24);
+	lcdtp_sendlogun(v >> 20);
+	lcdtp_sendlogun(v >> 16);
+	lcdtp_sendlogun(v >> 12);
+	lcdtp_sendlogun(v >> 8);
+	lcdtp_sendlogun(v >> 4);
+	lcdtp_sendlogun(v);
+}
+
+
+

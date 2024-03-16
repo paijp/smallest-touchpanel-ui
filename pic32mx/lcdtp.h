@@ -29,6 +29,15 @@ W	gget_stw(W font, const UB *s);
 UW	gettp();
 void	init_lcdtp();
 
+void	lcdtp_sendlogc(W c);
+void	lcdtp_sendlogs(const char *s);
+void	lcdtp_sendlogdec(W v);
+void	lcdtp_sendlogun(UW v);
+void	lcdtp_sendlogub(UW v);
+void	lcdtp_sendloguh(UW v);
+void	lcdtp_sendloguw(UW v);
+
+
 #define	TPLIB_CMD_MASK	0xff000000
 #define	TPLIB_CMD_NULL	0
 #define	TPLIB_CMD_PRESS	0x10000000		/* 10xxxyyy */

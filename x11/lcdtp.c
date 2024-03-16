@@ -314,6 +314,70 @@ void	init_lcdtp()
 }
 
 
+void	lcdtp_sendlogc(W c)
+{
+	fputc(c, stderr);
+}
+
+
+void	lcdtp_sendlogs(const char *s)
+{
+	W	c;
+	
+	while ((c = *(s++)))
+		lcdtp_sendlogc(c);
+}
+
+
+void	lcdtp_sendlogdec(W v)
+{
+	if ((v < 0)) {
+		v = -v;
+		lcdtp_sendlogc('-');
+	}
+	if (v >= 10)
+		lcdtp_sendlogdec(v / 10);
+	lcdtp_sendlogc('0' + (v % 10));
+}
+
+
+void	lcdtp_sendlogun(UW v)
+{
+	static	const	char *bin2hex = "0123456789abcdef";
+	
+	lcdtp_sendlogc(bin2hex[v & 0xf]);
+}
+
+
+void	lcdtp_sendlogub(UW v)
+{
+	lcdtp_sendlogun(v >> 4);
+	lcdtp_sendlogun(v);
+}
+
+
+void	lcdtp_sendloguh(UW v)
+{
+	lcdtp_sendlogun(v >> 12);
+	lcdtp_sendlogun(v >> 8);
+	lcdtp_sendlogun(v >> 4);
+	lcdtp_sendlogun(v);
+}
+
+
+void	lcdtp_sendloguw(UW v)
+{
+	lcdtp_sendlogun(v >> 28);
+	lcdtp_sendlogun(v >> 24);
+	lcdtp_sendlogun(v >> 20);
+	lcdtp_sendlogun(v >> 16);
+	lcdtp_sendlogun(v >> 12);
+	lcdtp_sendlogun(v >> 8);
+	lcdtp_sendlogun(v >> 4);
+	lcdtp_sendlogun(v);
+}
+
+
 #ifdef STANDALONE
 int	main(int ac, char **av)
 {
