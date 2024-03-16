@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 ### Changed
 - lcdtp.c: update the circuit markup description.
+- pcb/: newest version.
 
 ## [0.0.3] - 2023-12-24
 ### Changed
