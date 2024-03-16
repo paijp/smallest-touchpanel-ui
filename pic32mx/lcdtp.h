@@ -2,7 +2,7 @@
 /*
 	Smallest touchpanel UI https://github.com/paijp/smallest-touchpanel-ui
 
-	Copyright (c) 2022-2023 paijp
+	Copyright (c) 2022-2024 paijp
 
 	This software is released under the Apache 2.0 license.
 	http://www.apache.org/licenses/
@@ -34,6 +34,6 @@ void	init_lcdtp();
 #define	TPLIB_CMD_PRESS	0x10000000		/* 10xxxyyy */
 #define	TPLIB_CMD_PRESSING	0x11000000		/* 10xxxyyy */
 
-#define	TPLIB_FONT12	0
+#define	LCDTP_FONT12	0
 
 

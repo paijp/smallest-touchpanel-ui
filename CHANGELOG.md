@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - lcdtp.c: update the circuit markup description.
 - pcb/: newest version.
+- lcdtp.h tplib.c: TPLIB_FONT12 -> LCDTP_FONT12
 
 ## [0.0.3] - 2023-12-24
 ### Changed
