@@ -488,6 +488,7 @@ UW	gettp()
 	W	x, y, type;
 	XEvent	ev0;
 	
+	usleep(61 * 6);
 	for (;;) {
 		if ((lcdtp_polltask))
 			lcdtp_polltask();
