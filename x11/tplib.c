@@ -211,7 +211,9 @@ W	tplib_parts_buttongroup(struct tplib_parts_struct *p, UW cmd)
 		*((W*)p->ppar) = ret = p->par;
 	else
 		*((W*)p->ppar) = ret = TPLIB_CONTINUE;
+#if 0
 	ret = p->par;
+#endif
 	if ((p->fn))
 		ret = p->fn(p, TPLIB_CMD_CHANGE);
 	v = *((W*)p->ppar);
