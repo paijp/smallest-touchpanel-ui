@@ -13,6 +13,9 @@
 
 const	struct	tplib_font_struct	*tplib_systemfont = LCDTP_FONT12;
 
+static	char	*funcname = NULL;
+static	char	*sha1 = NULL;
+
 
 W	tplib_parts_fill(struct tplib_parts_struct *p, UW cmd)
 {
@@ -284,6 +287,16 @@ W	tplib_proc_redraw(struct tplib_parts_struct *p, UW cmd)
 }
 
 
+W	tplib_parts_log(struct tplib_parts_struct *list, UW cmd)
+{
+	if ((list)) {
+		funcname = list->ppar;
+		sha1 = list->config;
+	}
+	return TPLIB_CONTINUE;
+}
+
+
 W	tplib_proc(struct tplib_parts_struct *list, UW cmd)
 {
 	static	W	redraw = 2;
@@ -333,13 +346,13 @@ W	tplib_proc(struct tplib_parts_struct *list, UW cmd)
 		}
 		redraw = 0;
 	}
+	funcname = NULL;
+	sha1 = NULL;
 	switch (cmd & TPLIB_CMD_MASK) {
 		case	TPLIB_CMD_PRESS:
 		case	TPLIB_CMD_PRESSING:
 			p = list;
 			while ((p->parts)) {
-				W	ret;
-				
 				if (x < p->left)
 					;
 				else if (x >= p->left + p->width)
@@ -348,8 +361,32 @@ W	tplib_proc(struct tplib_parts_struct *list, UW cmd)
 					;
 				else if (y >= p->top + p->height)
 					;
-				else if ((ret = p->parts(p, cmd)) != TPLIB_CONTINUE)
-					return ret;
+				else {
+					W	ret;
+					
+					if (((cmd & TPLIB_CMD_MASK) == TPLIB_CMD_PRESS)&&(funcname)) {
+						lcdtp_sendlogs("#PRESS:");
+						if ((sha1))
+							lcdtp_sendlogs(sha1);
+						lcdtp_sendlogc(':');
+						lcdtp_sendlogs(funcname);
+						lcdtp_sendlogc('[');
+						lcdtp_sendlogdec(p - list);
+						lcdtp_sendlogc(']');
+						if ((p->config))
+							lcdtp_sendlogs(p->config);
+						lcdtp_sendlogs("\n");
+						ret = p->parts(p, cmd);
+						lcdtp_sendlogs("#RET:");
+						lcdtp_sendloguw(ret);
+						lcdtp_sendlogs("\n");
+						if (ret != TPLIB_CONTINUE)
+							return ret;
+					} else {
+						if ((ret = p->parts(p, cmd)) != TPLIB_CONTINUE)
+							return ret;
+					}
+				}
 				p++;
 			}
 			break;

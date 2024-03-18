@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - */lcdtp.?: fontid -> struct lcdtp_font_struct *font.
 - x11/lcdtp.c: usleep in gettp() as hardware wait in pic32mx.
 - */tplib.c: Fix return value in tplib_parts_buttongroup().
+- */tplib.? */sample*: support tplib_parts_log().
 
 ## [0.0.3] - 2023-12-24
 ### Changed

@@ -11,6 +11,13 @@
 #include	"lcdtp.h"
 
 
+#ifndef	SHA1SUM
+#define	SHA1SUM	0
+#endif
+#define	TPLIB_CONST2STRSUB(x)	#x
+#define	TPLIB_CONST2STR(x)	TPLIB_CONST2STRSUB(x)
+
+
 	/* tplib.c */
 
 const	extern	struct	tplib_font_struct	*tplib_systemfont;
@@ -41,6 +48,7 @@ W	tplib_alwaysselect(struct tplib_parts_struct *p, UW cmd);
 W	tplib_parts_buttongroup(struct tplib_parts_struct *p, UW cmd);
 W	tplib_parts_sliderv(struct tplib_parts_struct *p, UW cmd);
 W	tplib_proc_redraw(struct tplib_parts_struct *p, UW cmd);
+W	tplib_parts_log(struct tplib_parts_struct *p, UW cmd);
 W	tplib_proc(struct tplib_parts_struct *p, UW cmd);
 W	tplib_config2ppar(struct tplib_parts_struct *p, UW cmd);
 W	tplib_setupflip(void *message);
