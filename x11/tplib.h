@@ -2,7 +2,7 @@
 /*
 	Smallest touchpanel UI https://github.com/paijp/smallest-touchpanel-ui
 
-	Copyright (c) 2022-2023 paijp
+	Copyright (c) 2022-2024 paijp
 
 	This software is released under the Apache 2.0 license.
 	http://www.apache.org/licenses/
@@ -12,6 +12,8 @@
 
 
 	/* tplib.c */
+
+const	extern	struct	tplib_font_struct	*tplib_systemfont;
 
 struct	tplib_parts_struct {
 	W	(*parts)(struct tplib_parts_struct *p, UW cmd);

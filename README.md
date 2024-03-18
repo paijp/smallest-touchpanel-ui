@@ -4,6 +4,7 @@ Sorry, under construction.
 
 ## Important changes.
 
+- 2024/03/18 fontid -> struct lcdtp_font_struct *font
 - 2023/07/22 polltask() -> lcdtp_polltask().
 
 ## usage

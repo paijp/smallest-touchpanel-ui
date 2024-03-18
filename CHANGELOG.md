@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - */lcdtp.?: support lcdtp_sendlog*()
 - lcdtp.c lcdtp.html: fix MCP3424 pin diagram.
 - add photos.
+- */lcdtp.?: fontid -> struct lcdtp_font_struct *font.
 
 ## [0.0.3] - 2023-12-24
 ### Changed

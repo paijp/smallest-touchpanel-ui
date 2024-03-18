@@ -2,13 +2,16 @@
 /*
 	Smallest touchpanel UI https://github.com/paijp/smallest-touchpanel-ui
 
-	Copyright (c) 2022-2023 paijp
+	Copyright (c) 2022-2024 paijp
 
 	This software is released under the Apache 2.0 license.
 	http://www.apache.org/licenses/
 */
 
 #include	"tplib.h"
+
+
+const	struct	tplib_font_struct	*tplib_systemfont = LCDTP_FONT12;
 
 
 W	tplib_parts_fill(struct tplib_parts_struct *p, UW cmd)
@@ -41,7 +44,7 @@ W	tplib_parts_text(struct tplib_parts_struct *p, UW cmd)
 		if ((ret = p->fn(p, cmd)) != TPLIB_CONTINUE)
 			return ret;
 	
-	gdra_stp(p->left, p->top + p->height, p->par, TPLIB_BGCOLOR, LCDTP_FONT12, (UB*)p->ppar);
+	gdra_stp(p->left, p->top + p->height, p->par, TPLIB_BGCOLOR, tplib_systemfont, (UB*)p->ppar);
 	return TPLIB_CONTINUE;
 }
 
@@ -60,7 +63,7 @@ W	tplib_parts_dec(struct tplib_parts_struct *p, UW cmd)
 			break;
 	}
 	
-	gdra_stp(p->left, p->top + p->height, TPLIB_CHARCOLOR, TPLIB_BGCOLOR, LCDTP_FONT12, (UB*)p->config);
+	gdra_stp(p->left, p->top + p->height, TPLIB_CHARCOLOR, TPLIB_BGCOLOR, tplib_systemfont, (UB*)p->config);
 	
 	if ((p->fn))
 		val = p->fn(p, cmd);
@@ -79,10 +82,10 @@ W	tplib_parts_dec(struct tplib_parts_struct *p, UW cmd)
 	do {
 		buf[0] = '0' + (val % 10);
 		val /= 10;
-		gdra_stp(x -= 8, p->top + p->height, TPLIB_CHARCOLOR, TPLIB_BGCOLOR, LCDTP_FONT12, buf);
+		gdra_stp(x -= 8, p->top + p->height, TPLIB_CHARCOLOR, TPLIB_BGCOLOR, tplib_systemfont, buf);
 	} while ((val));
 	if (sign < 0)
-		gdra_stp(x -= 8, p->top + p->height, TPLIB_CHARCOLOR, TPLIB_BGCOLOR, LCDTP_FONT12, (UB*)"-");
+		gdra_stp(x -= 8, p->top + p->height, TPLIB_CHARCOLOR, TPLIB_BGCOLOR, tplib_systemfont, (UB*)"-");
 	
 	return TPLIB_CONTINUE;
 }
@@ -98,8 +101,8 @@ W	tplib_parts_button(struct tplib_parts_struct *p, UW cmd)
 		case	TPLIB_CMD_REDRAW:
 			gfil_rec(p->left, p->top, p->left + p->width, p->top + p->height - 2, TPLIB_PARTSBGCOLOR);
 			gfil_rec(p->left, p->top + p->height - 2, p->left + p->width, p->top + p->height, TPLIB_PARTSFGCOLOR);
-			x = p->width - gget_stw(LCDTP_FONT12, (UB*)p->config);
-			gdra_stp(p->left + x / 2, p->top + p->height - 4, TPLIB_PARTSCHARCOLOR, TPLIB_PARTSBGCOLOR, LCDTP_FONT12, (UB*)p->config);
+			x = p->width - gget_stw(tplib_systemfont, (UB*)p->config);
+			gdra_stp(p->left + x / 2, p->top + p->height - 4, TPLIB_PARTSCHARCOLOR, TPLIB_PARTSBGCOLOR, tplib_systemfont, (UB*)p->config);
 			return TPLIB_CONTINUE;
 		case	TPLIB_CMD_PRESS:
 			break;
@@ -140,8 +143,8 @@ W	tplib_parts_buttonalt(struct tplib_parts_struct *p, UW cmd)
 		case	TPLIB_CMD_REDRAW:
 			gfil_rec(p->left, p->top, p->left + p->width, p->top + p->height - 2, TPLIB_PARTSBGCOLOR);
 			gfil_rec(p->left, p->top + p->height - 2, p->left + p->width, p->top + p->height, TPLIB_PARTSFGCOLOR);
-			x = p->width - gget_stw(LCDTP_FONT12, (UB*)p->config);
-			gdra_stp(p->left + x / 2, p->top + p->height - 4, TPLIB_PARTSCHARCOLOR, TPLIB_PARTSBGCOLOR, LCDTP_FONT12, (UB*)p->config);
+			x = p->width - gget_stw(tplib_systemfont, (UB*)p->config);
+			gdra_stp(p->left + x / 2, p->top + p->height - 4, TPLIB_PARTSCHARCOLOR, TPLIB_PARTSBGCOLOR, tplib_systemfont, (UB*)p->config);
 		case	TPLIB_CMD_REDRAWPART:
 			gfil_rec(p->left + 6, p->top + 3, p->left + p->width - 6, p->top + 7, (v)? TPLIB_PARTSONCOLOR : TPLIB_PARTSOFFCOLOR);
 			return TPLIB_CONTINUE;
@@ -195,8 +198,8 @@ W	tplib_parts_buttongroup(struct tplib_parts_struct *p, UW cmd)
 		case	TPLIB_CMD_REDRAW:
 			gfil_rec(p->left, p->top, p->left + p->width, p->top + p->height - 2, TPLIB_PARTSBGCOLOR);
 			gfil_rec(p->left, p->top + p->height - 2, p->left + p->width, p->top + p->height, TPLIB_PARTSFGCOLOR);
-			x = p->width - gget_stw(LCDTP_FONT12, (UB*)p->config);
-			gdra_stp(p->left + x / 2, p->top + p->height - 4, TPLIB_PARTSCHARCOLOR, TPLIB_PARTSBGCOLOR, LCDTP_FONT12, (UB*)p->config);
+			x = p->width - gget_stw(tplib_systemfont, (UB*)p->config);
+			gdra_stp(p->left + x / 2, p->top + p->height - 4, TPLIB_PARTSCHARCOLOR, TPLIB_PARTSBGCOLOR, tplib_systemfont, (UB*)p->config);
 		case	TPLIB_CMD_REDRAWPART:
 			gfil_rec(p->left + 6, p->top + 3, p->left + p->width - 6, p->top + 7, (v == p->par)? TPLIB_PARTSONCOLOR : TPLIB_PARTSOFFCOLOR);
 			return TPLIB_CONTINUE;

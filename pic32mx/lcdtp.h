@@ -22,10 +22,17 @@ extern	UW	lcdtp_flip;
 
 extern	void	(*lcdtp_polltask)();
 
+extern	const	struct	lcdtp_font_struct {
+	struct	lcdtp_font_attr_struct {
+		const	struct	lcdtp_font_struct	*fallback;
+	} attr;
+	unsigned char	font[];
+} lcdtp_font12h;
+
 void	dly_tsk(W ms);
 void	gfil_rec(W l, W t, W r, W b, UW color16);
-void	gdra_stp(W x, W y, UW color16, UW bgcolor16, W font, const UB *s);
-W	gget_stw(W font, const UB *s);
+void	gdra_stp(W x, W y, UW color16, UW bgcolor16, const struct lcdtp_font_struct *font, const UB *s);
+W	gget_stw(const struct lcdtp_font_struct *font, const UB *s);
 UW	gettp();
 void	init_lcdtp();
 
@@ -43,6 +50,6 @@ void	lcdtp_sendloguw(UW v);
 #define	TPLIB_CMD_PRESS	0x10000000		/* 10xxxyyy */
 #define	TPLIB_CMD_PRESSING	0x11000000		/* 10xxxyyy */
 
-#define	LCDTP_FONT12	0
+#define	LCDTP_FONT12	(NULL)
 
 
