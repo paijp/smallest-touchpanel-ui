@@ -23,12 +23,8 @@
 UW	lcdtp_flip = 0;
 void	(*lcdtp_polltask)() = NULL;
 
-const	struct	tplib_font_struct	tplib_font12h = {{NULL}, 
-	{8, 12, 		/* font-width, font-height */
-	0, 11, 		/* offset-x(0:left), offset-y(0:top) */
-	0x00, 0x60, 		/* total count: 0x0060 (96) */
-	7, 		/* code = 7 bits */
-	/* code1(7bits), bitmap1(96bits), code2(7bits), bitmap2(96bits), .... code96(7bits), bitmap96(96bits) */
+const	struct	lcdtp_font_struct	lcdtp_font12h = {{NULL}, 
+	{8, 12, 0, 11, 0x00, 0x60, 7, 
 	0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x84, 0x00, 0x20, 
 	0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 
@@ -329,7 +325,7 @@ static	W	findcode(W code)
 }
 
 
-void	gdra_stp(W x, W y, UW color16, UW bgcolor16, const struct tplib_font_struct *font, const UB *s)
+void	gdra_stp(W x, W y, UW color16, UW bgcolor16, const struct lcdtp_font_struct *font, const UB *s)
 {
 	UW	color, bgcolor;
 	UW	*p;
@@ -338,13 +334,13 @@ void	gdra_stp(W x, W y, UW color16, UW bgcolor16, const struct tplib_font_struct
 		return;
 	
 	if (font == NULL)
-		font = &tplib_font12h;
+		font = &lcdtp_font12h;
 	
 	color = color16to32(color16);
 	bgcolor = color16to32(bgcolor16);
 	
 	for (;;) {
-		const	struct	tplib_font_struct	*f;
+		const	struct	lcdtp_font_struct	*f;
 		W	c;
 		
 		if ((c = *(s++)) < 0x80) {
@@ -418,7 +414,7 @@ void	gdra_stp(W x, W y, UW color16, UW bgcolor16, const struct tplib_font_struct
 }
 
 
-W	gget_stw(const struct tplib_font_struct *font, const UB *s)
+W	gget_stw(const struct lcdtp_font_struct *font, const UB *s)
 {
 	W	ret;
 	
@@ -426,11 +422,11 @@ W	gget_stw(const struct tplib_font_struct *font, const UB *s)
 		return 0;
 	
 	if (font == NULL)
-		font = &tplib_font12h;
+		font = &lcdtp_font12h;
 	
 	ret = 0;
 	for (;;) {
-		const	struct	tplib_font_struct	*f;
+		const	struct	lcdtp_font_struct	*f;
 		W	c;
 		
 		if ((c = *(s++)) < 0x80) {
