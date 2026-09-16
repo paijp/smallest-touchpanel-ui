@@ -149,12 +149,27 @@ that.
 
 ## Verified
 
-- `lcdtp.c`, `tplib.c` and `debuglog.c` compile clean at `-O2 -Wall -Wextra`
-- the full image links with GNU RX 14.2.0.202607
-- debug log lands in `.data` as intended: 4112 bytes (16 header + 4096
-  buffer); `DPGL` magic and size `0x00001000` present in the linked image
+- `lcdtp.c` and `debuglog.c` compile with no warnings at `-O2 -Wall -Wextra`
+- the whole program links with GNU RX 14.2.0.202607 for `-mcpu=rx64m`:
+  text 11373, data 5844, bss 77, and a 51584-byte `.mot` to flash
+- the framebuffer address is outside the linker's RAM region (which is
+  0x0 + 640KB), so nothing the linker places can collide with it
+- debug log lands in `.data` as intended: `_debuglog` at 0x504, reading
+  `44 50 47 4c 00 10 00 00` - `DPGL` and size 0x1000
 - ring buffer wrap, overrun accounting and idle polling, against a simulation
   of both sides
+
+One build-side wrinkle: GCC 14 rejects incompatible pointer types outright,
+and `tplib.h` declares `tplib_systemfont` as `struct tplib_font_struct *` -
+an incomplete type that is defined nowhere and is really the
+`struct lcdtp_font_struct *` that `gdra_stp` takes. The rx65n build passes
+`-Wno-error=incompatible-pointer-types` rather than diverge its copy of
+tplib from the other ports'. Fixing the declaration would be one line, in
+one place, for all three.
+
+`sample1.c` is laid out for the 240x320 screen the other ports have, so on a
+480x272 panel its lower parts fall off the bottom. Everything clips safely;
+it is a layout question, not a port question.
 
 **Not yet run on hardware.** The board was disconnected while this was
 written, so the display and touch paths have been checked by reading and by
