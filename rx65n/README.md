@@ -170,30 +170,49 @@ Finished target connection
 GDB: 61234
 ```
 
-### Getting the emulator back into a state where that works
+### Why it then stopped connecting: a 1-second timeout over usbip
 
-Harder than it should be, and worth writing down.
+Having connected once, it would not connect again - every start failing with
+"can not connect to the emulator" *before* reading the emulator's firmware
+version, while `rfp-cli` kept working perfectly against the same device over
+the same link.
 
-The E2 Lite gets stuck in a mode where every `e2-server-gdb` start fails
-with "can not connect to the emulator" *before* reading the firmware
-version, while `rfp-cli` continues to work perfectly against the same
-device. Two things put it there: running `rfp-cli`, which loads programming
-firmware into the emulator, and killing a server that had connected.
+`LIBUSB_DEBUG=4` shows exactly what happens:
 
-Nothing reachable over usbip clears it - not `usbip detach`/`attach`, not
-`usbip unbind`/`bind` on the server side, not toggling the device's
-`authorized` flag for a fresh enumeration, and not repeated retries. It
-wants a real USB re-plug.
+```
+0.179  libusb_open 1.10
+0.182  submit_transfer
+1.647  status=-2  transferred=4     <- 1.47s: cancelled, timed out
+1.648  libusb_close
+1.650  libusb_open                     (the server's own retry)
+1.810  status=0   transferred=4     <- 0.16s
+1.908  status=0   transferred=32    <- 0.10s
+1.910  libusb_close                    ... and it gives up anyway
+```
 
-So the order of operations is: power-cycle the emulator, then go straight to
-`e2-server-gdb` without running `rfp-cli` in between. Flash first, debug
-second, and a re-plug between the two.
+The **first** control transfer after `libusb_open` takes about 1.5 seconds;
+libusb allows it 1000ms. Everything after it completes in about 0.1s. The
+server does retry, and the retry succeeds - but it has already decided the
+emulator is unreachable.
 
-Also note the settle time. After a server is killed the device needs tens of
-seconds; a run started too early dies after three USB transfers with the
-same "can not connect to the emulator", which looks like the stuck state and
-is not. Only trust a run that got as far as "Firmware up to date" - that
-single check is what keeps this diagnosable.
+The path is long: a TCG-emulated VM, through slirp, through a container,
+through an SSH tunnel, to a Raspberry Pi, to the device. `rfp-cli` is
+unaffected because it allows its transfers far more time.
+
+What does *not* fix it: warming the path with control transfers immediately
+beforehand, retrying (15 consecutive attempts, all identical), a physical
+USB re-plug, `usbip` detach/attach, `usbip` unbind/bind on the server side,
+or toggling the device's `authorized` flag for a fresh enumeration.
+
+So the connection that did succeed was won on timing, and the timing has
+since gone the other way and stayed there. Anyone reproducing this should
+shorten the path rather than fight it: run `e2-server-gdb` on a machine with
+the emulator plugged into it directly, or at least without an SSH tunnel and
+an emulated CPU in the way. The option set above is correct and is the part
+worth taking away; the transport is what defeats it here.
+
+Until then the screen is the debug channel that works, which is what diag1.c
+is for.
 
 ### -uWorkRamAddress and the log
 
