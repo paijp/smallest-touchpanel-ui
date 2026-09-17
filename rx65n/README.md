@@ -120,52 +120,90 @@ buffer lives, from 0x504. Left at the default the debugger would quietly
 overwrite the log it was being used to read. Internal RAM runs to 0xA0000
 and the program ends below 0x2000, so anywhere high is safe.
 
-### Not connecting yet: the interface is still JTAG
+### Connecting: the full option set, not the interface
 
-On this Envision Kit the debugger does not get a link to the MCU. Every
-attempt ends at the same first step,
+This is the invocation that works. It is not a tidied-up version of the
+Renesas documentation - it is what e2 studio itself generates, and the
+details matter:
+
+```bash
+e2-server-gdb -g E2LITE -t R5F565NE -p 61234 -d 61236 \
+    -uConnectionTimeout= 30 -uClockSrcHoco= 1 -uPTimerClock= 120000000 \
+    -uAllowClockSourceInternal= 1 -uUseFine= 0 -uJTagClockFreq= 6.00 \
+    -w 0 -z 0 -uRegisterSetting= 0 -uModePin= 0 \
+    -uChangeStartupBank= 0 -uStartupBank= 0 -uDebugMode= 0 \
+    -uExecuteProgram= 0 -uIdCode= FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF \
+    -uresetOnReload= 1 -n 0 -uWorkRamAddress= 1000 \
+    -uverifyOnWritingMemory= 0 -uProgReWriteIRom= 0 -uProgReWriteDFlash= 0 \
+    -uhookWorkRamAddr= 0x7fb40 -uhookWorkRamSize= 0x4c0 \
+    -uOSRestriction= 0 -l -uCore= 'SINGLE_CORE|enabled|1|main' \
+    -uSyncMode= async -uFirstGDB= main -uAllowRRMDMM= 1
+```
+
+**The space after each `=` is load-bearing.** The value is a separate argv
+element. Written the ordinary way, `-uUseFine=1` is an option with an empty
+value and is silently ignored - it does not even reach the emulator. Two
+runs, one with it and one without, captured under `LIBUSB_DEBUG=4`, produce
+an identical 56-transfer conversation byte-count for byte-count.
+
+That detail cost a long detour. Every attempt of the form `-uOption=value`
+failed at
 
 ```
-Firmware up to date at version '1.12.00.001'
 E20_set_clk() Failed
 RxTargetDevice::startConnection() Rx_Init_E1_E20() Failed
 ```
 
-The emulator itself is healthy throughout - it is found, its interface is
-claimed, its bulk transfers all complete and it reports its own firmware
-version - so the failure is on its far side, between it and the MCU.
-
-The interface is the suspect: this part is debugged over **FINE**, and the
-server defaults to JTAG. But `-uUseFine=1` does not select it. Captured with
-`LIBUSB_DEBUG=4`, a run with and a run without it produce the *identical*
-56-transfer conversation, byte-count for byte-count:
+which reads like a clock or interface problem and is neither: with the
+values attached rather than passed, the server had almost no settings at
+all. The interface in particular is a red herring - **JTAG at 6.00MHz is
+what this board wants**, not FINE, despite FINE being the obvious choice for
+an E2 Lite on RX. A successful connection looks like this:
 
 ```
-4 32 4 32 2 8 6 6 3 6 2 81 16 9 2 22 2 8 6 6 2 81 2 81 16 9 ...
+Firmware up to date at version '1.12.00.001'
+        Target endian (MDE pin)    : little
+  Emulator Board Revision       E2LITE  Rev.0
+  User Vcc                      3.28711 V
+  USB Bus Power                 4.83237 V
+Finished target connection
+GDB: 61234
 ```
 
-so nothing about that option reaches the emulator, and every attempt so far
-has in fact been JTAG. `-uInterface=FINE`, `-uInteface=FINE`,
-`-uFineBaudRate` at 1.5 and 2.0 Mbps, and `-uJTagClockFreq` at 16.5, 6.0 and
-1.5 MHz all end the same way.
+### Getting the emulator back into a state where that works
 
-Two cautions for anyone repeating this. First, over usbip the emulator needs
-tens of seconds to settle after a server is killed; a run started too early
-dies after three transfers with a misleading "can not connect to the
-emulator", which reads like a different fault and is not one. Only trust a
-run that got as far as "Firmware up to date". Second, that flakiness is
-exactly how this investigation went wrong once already: two runs of the same
-options gave two different errors, and the difference looked like progress.
+Harder than it should be, and worth writing down.
 
-The leading hypothesis is not a setting in the server at all but the board:
-with **SW1-1 on**, the part is held in SCI boot mode, where there is no
-debug link to establish. That also explains what `rfp-cli` shows
-independently - `-if uart` programs this board reliably, `-if fine` gets as
-far as connecting the emulator and then fails as though the target were
-dead. Unconfirmed: it needs the switch moved and the board power-cycled.
+The E2 Lite gets stuck in a mode where every `e2-server-gdb` start fails
+with "can not connect to the emulator" *before* reading the firmware
+version, while `rfp-cli` continues to work perfectly against the same
+device. Two things put it there: running `rfp-cli`, which loads programming
+firmware into the emulator, and killing a server that had connected.
 
-Meanwhile diag1.c exists because the screen is the debug channel that does
-work.
+Nothing reachable over usbip clears it - not `usbip detach`/`attach`, not
+`usbip unbind`/`bind` on the server side, not toggling the device's
+`authorized` flag for a fresh enumeration, and not repeated retries. It
+wants a real USB re-plug.
+
+So the order of operations is: power-cycle the emulator, then go straight to
+`e2-server-gdb` without running `rfp-cli` in between. Flash first, debug
+second, and a re-plug between the two.
+
+Also note the settle time. After a server is killed the device needs tens of
+seconds; a run started too early dies after three USB transfers with the
+same "can not connect to the emulator", which looks like the stuck state and
+is not. Only trust a run that got as far as "Firmware up to date" - that
+single check is what keeps this diagnosable.
+
+### -uWorkRamAddress and the log
+
+e2 studio passes `-uWorkRamAddress= 1000`, from this target's entry in
+`e2_devices.xml`: work RAM at 0x1000 for 1280 bytes. That is inside `.data`,
+and `.data` is where the ring buffer lives, from 0x504 - so as configured,
+the debugger overwrites the log it is being used to read. Internal RAM runs
+to 0xA0000 and the program ends below 0x2000, so there is plenty of room
+higher up; moving the buffer in the firmware is the sounder fix, since the
+server's own value is the one e2 studio and the device description agree on.
 
 The buffer's address is resolved from the `.elf` with `nm`, so nothing is
 hardcoded and it can move freely between builds. (The RX ABI prefixes C
