@@ -108,9 +108,44 @@ The alternative, writing to data flash and halting to dump it with
 wears the flash, and is far too slow for anything chatty.
 
 ```bash
-e2-server-gdb -g E2LITE -t R5F565NE -p 61234 -d 61236 -uAllowRRMDMM=1 -n 0 &
+e2-server-gdb -g E2LITE -t R5F565NE -p 61234 -d 61236 \
+    -uAllowRRMDMM=1 -uWorkRamAddress=0x90000 -n 0 &
 python3 tools/readlog.py lcdtp.elf
 ```
+
+`-uWorkRamAddress` matters more than it looks. The device description in
+e2 studio's `e2_devices.xml` puts this target's debugger work RAM at 0x1000
+for 1280 bytes, which is inside `.data` - and `.data` is where the ring
+buffer lives, from 0x504. Left at the default the debugger would quietly
+overwrite the log it was being used to read. Internal RAM runs to 0xA0000
+and the program ends below 0x2000, so anywhere high is safe.
+
+### It does not currently connect on this board
+
+Worth recording, because it cost a day: on this Envision Kit the debugger
+never gets a link to the MCU. Every attempt ends at the same first step,
+
+```
+Firmware up to date at version '1.12.00.001'
+E20_set_clk() Failed
+RxTargetDevice::startConnection() Rx_Init_E1_E20() Failed
+```
+
+identically for `-uUseFine=1` and for `-uJTagClockFreq` at 16.5, 6.0 and
+1.5 MHz, before and after a fresh USB attach. The emulator itself is fine -
+it is found, its interface is claimed, its bulk transfers all complete and
+it reports its own firmware version - so the failure is on the emulator's
+far side, between it and the MCU.
+
+That fits what `rfp-cli` already showed independently: `-if uart` programs
+this board reliably, `-if fine` gets as far as connecting the emulator and
+then fails as though the target were dead. The on-board E2 Lite reaches the
+RX65N over the SCI boot path; the FINE/JTAG debug link is not coming up.
+No debug link means no RRM/DMM, so this route is unavailable here until
+that is sorted out.
+
+Which is why diag1.c exists. The screen is the debug channel that does
+work.
 
 The buffer's address is resolved from the `.elf` with `nm`, so nothing is
 hardcoded and it can move freely between builds. (The RX ABI prefixes C
