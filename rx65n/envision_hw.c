@@ -338,25 +338,32 @@ volatile UW	envision_i2c_trace[ENVISION_I2C_TRACE_N] = {0};
 	success and 0 on timeout; a 0 aborts the transaction all the way up, and
 	the caller simply tries again next time round.
 
-	TEND, not TDRE, is what "the frame went out" means here. TDRE is set as
-	soon as the byte moves from TDR to the shift register, which on an I2C
-	bus is long before the ninth clock - so a caller that waited on TDRE and
-	then read the ACK bit would be reading it before the ACK had arrived, and
-	would see every device as absent. That is exactly what the first version
-	of this file did, and the symptom was a board that drew perfectly and
-	never registered a touch. In simple IIC mode the transmit interrupt the
-	reference driver waits on is issued at the end of the acknowledge bit,
-	which is what TEND reports.
+	"The frame went out" has to mean the ninth clock has been and gone,
+	because write_address() reads the acknowledge bit immediately after.
+	TDRE alone does not mean that: it is set as soon as the byte moves from
+	TDR into the shift register, long before the ACK on an I2C bus, so a
+	caller that waits on TDRE reads the ACK slot before the device has
+	driven it and concludes every device is absent.
 
-	TEND is cleared by writing to TDR, so every caller writes TDR first and
-	waits afterwards.
+	Waiting on TEND alone did not do it either. On hardware the trace showed
+	the wait returning with SSR = 0xc0 - TDRE and RDRF set, TEND clear - and
+	the ACK bit then reading as a NACK on every single transaction, which is
+	the same failure by a different route.
+
+	So require both. TDRE and TEND together cannot be true before the frame
+	has finished, whatever the ordering of the individual flags, and both
+	are cleared by the write to TDR that precedes every call.
 */
+#define	SSR_TDRE	0x80
+#define	SSR_TEND	0x04
+
 static	W	wait_tx(void)
 {
 	UW	n;
 
 	for (n = I2C_TIMEOUT; n > 0; n--)
-		if (SCI6.SSR.BIT.TEND != 0)
+		if ((SCI6.SSR.BYTE & (SSR_TDRE | SSR_TEND)) ==
+		    (SSR_TDRE | SSR_TEND))
 			return 1;
 	return 0;
 }
