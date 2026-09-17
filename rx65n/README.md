@@ -120,10 +120,10 @@ buffer lives, from 0x504. Left at the default the debugger would quietly
 overwrite the log it was being used to read. Internal RAM runs to 0xA0000
 and the program ends below 0x2000, so anywhere high is safe.
 
-### It does not currently connect on this board
+### Not connecting yet: the interface is still JTAG
 
-Worth recording, because it cost a day: on this Envision Kit the debugger
-never gets a link to the MCU. Every attempt ends at the same first step,
+On this Envision Kit the debugger does not get a link to the MCU. Every
+attempt ends at the same first step,
 
 ```
 Firmware up to date at version '1.12.00.001'
@@ -131,20 +131,40 @@ E20_set_clk() Failed
 RxTargetDevice::startConnection() Rx_Init_E1_E20() Failed
 ```
 
-identically for `-uUseFine=1` and for `-uJTagClockFreq` at 16.5, 6.0 and
-1.5 MHz, before and after a fresh USB attach. The emulator itself is fine -
-it is found, its interface is claimed, its bulk transfers all complete and
-it reports its own firmware version - so the failure is on the emulator's
-far side, between it and the MCU.
+The emulator itself is healthy throughout - it is found, its interface is
+claimed, its bulk transfers all complete and it reports its own firmware
+version - so the failure is on its far side, between it and the MCU.
 
-That fits what `rfp-cli` already showed independently: `-if uart` programs
-this board reliably, `-if fine` gets as far as connecting the emulator and
-then fails as though the target were dead. The on-board E2 Lite reaches the
-RX65N over the SCI boot path; the FINE/JTAG debug link is not coming up.
-No debug link means no RRM/DMM, so this route is unavailable here until
-that is sorted out.
+The interface is the suspect: this part is debugged over **FINE**, and the
+server defaults to JTAG. But `-uUseFine=1` does not select it. Captured with
+`LIBUSB_DEBUG=4`, a run with and a run without it produce the *identical*
+56-transfer conversation, byte-count for byte-count:
 
-Which is why diag1.c exists. The screen is the debug channel that does
+```
+4 32 4 32 2 8 6 6 3 6 2 81 16 9 2 22 2 8 6 6 2 81 2 81 16 9 ...
+```
+
+so nothing about that option reaches the emulator, and every attempt so far
+has in fact been JTAG. `-uInterface=FINE`, `-uInteface=FINE`,
+`-uFineBaudRate` at 1.5 and 2.0 Mbps, and `-uJTagClockFreq` at 16.5, 6.0 and
+1.5 MHz all end the same way.
+
+Two cautions for anyone repeating this. First, over usbip the emulator needs
+tens of seconds to settle after a server is killed; a run started too early
+dies after three transfers with a misleading "can not connect to the
+emulator", which reads like a different fault and is not one. Only trust a
+run that got as far as "Firmware up to date". Second, that flakiness is
+exactly how this investigation went wrong once already: two runs of the same
+options gave two different errors, and the difference looked like progress.
+
+The leading hypothesis is not a setting in the server at all but the board:
+with **SW1-1 on**, the part is held in SCI boot mode, where there is no
+debug link to establish. That also explains what `rfp-cli` shows
+independently - `-if uart` programs this board reliably, `-if fine` gets as
+far as connecting the emulator and then fails as though the target were
+dead. Unconfirmed: it needs the switch moved and the board power-cycled.
+
+Meanwhile diag1.c exists because the screen is the debug channel that does
 work.
 
 The buffer's address is resolved from the `.elf` with `nm`, so nothing is
