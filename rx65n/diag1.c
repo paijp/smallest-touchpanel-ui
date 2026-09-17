@@ -45,10 +45,29 @@ static	void	hex8(UW v, UB *p)
 }
 
 
+static	void	dec5(W v, UB *p)
+{
+	W	i;
+
+	if (v < 0) {
+		v = 0;
+		p[0] = '-';
+	}
+	for (i = 4; i >= 0; i--) {
+		p[i] = (UB)('0' + (v % 10));
+		v /= 10;
+	}
+	p[5] = 0;
+}
+
+
 int	main(void)
 {
 	static	UB	line[24];
-	W	x, y, touched, i;
+	static	UW	prev[ENVISION_I2C_TRACE_N];
+	static	W	touches = 0;
+	static	W	lastx = -1, lasty = -1;
+	W	x, y, touched, i, changed;
 
 	init_lcdtp();
 	gfil_rec(0, 0, LCD_W, LCD_H, 0x0000);
@@ -59,6 +78,17 @@ int	main(void)
 		x = y = -1;
 		touched = envision_touch_get_raw(&x, &y);
 
+		/*
+			Log only what changed. At eight lines a pass the ring
+			buffer holds about four seconds, which is not enough to
+			still contain a touch by the time anyone can read it;
+			the steady state is identical pass after pass anyway.
+		*/
+		changed = 0;
+		for (i = 0; i < ENVISION_I2C_TRACE_N; i++)
+			if (envision_i2c_trace[i] != prev[i])
+				changed = 1;
+
 		for (i = 0; i < ENVISION_I2C_TRACE_N; i++) {
 			gfil_rec(8, 28 + i * 14, 240, 42 + i * 14, 0x0000);
 			gdra_stp(8, 40 + i * 14, 0xffff, 0x0000, NULL,
@@ -66,31 +96,51 @@ int	main(void)
 			hex8(envision_i2c_trace[i], line);
 			gdra_stp(88, 40 + i * 14, 0xffe0, 0x0000, NULL, line);
 
-			lcdtp_sendlogs(label[i]);
-			lcdtp_sendloguw(envision_i2c_trace[i]);
-			lcdtp_sendlogc('\n');
+			if ((changed)) {
+				lcdtp_sendlogs(label[i]);
+				lcdtp_sendloguw(envision_i2c_trace[i]);
+				lcdtp_sendlogc('\n');
+			}
+			prev[i] = envision_i2c_trace[i];
 		}
 
 		/*
-			Shown separately from the trace: a coordinate only means
-			anything when the transaction actually succeeded, and
-			printing a stale one next to a failure reads as though it
-			had worked.
+			A coordinate only means anything when the transaction
+			actually succeeded, so it is recorded here and nowhere
+			else - printed next to a failed read it would look as
+			though the read had worked.
 		*/
-		gfil_rec(260, 28, LCD_W, 160, 0x0000);
 		if ((touched)) {
-			gdra_stp(260, 40, 0x07ff, 0x0000, NULL, (UB*)"touch");
-			hex8((UW)x, line);
-			gdra_stp(260, 54, 0x07ff, 0x0000, NULL, line);
-			hex8((UW)y, line);
-			gdra_stp(260, 68, 0x07ff, 0x0000, NULL, line);
+			touches++;
+			lastx = x;
+			lasty = y;
+			lcdtp_sendlogs("TOUCH x=");
+			lcdtp_sendlogdec(x);
+			lcdtp_sendlogs(" y=");
+			lcdtp_sendlogdec(y);
+			lcdtp_sendlogc('\n');
 
 			/* and where, so the mapping can be eyeballed */
 			gfil_rec(x - 4, y - 4, x + 4, y + 4, 0xf800);
-		} else
-			gdra_stp(260, 40, 0xf800, 0x0000, NULL, (UB*)"no touch");
+		}
 
-		dly_tsk(150);
+		/*
+			Latched, not live: a coordinate that only shows while a
+			finger is down cannot be read by the person whose finger
+			it is.
+		*/
+		gfil_rec(260, 28, 460, 100, 0x0000);
+		gdra_stp(260, 40, 0x07ff, 0x0000, NULL, (UB*)"touches");
+		dec5(touches, line);
+		gdra_stp(350, 40, 0x07ff, 0x0000, NULL, line);
+		gdra_stp(260, 54, 0x07ff, 0x0000, NULL, (UB*)"last x");
+		dec5(lastx, line);
+		gdra_stp(350, 54, 0x07ff, 0x0000, NULL, line);
+		gdra_stp(260, 68, 0x07ff, 0x0000, NULL, (UB*)"last y");
+		dec5(lasty, line);
+		gdra_stp(350, 68, 0x07ff, 0x0000, NULL, line);
+
+		dly_tsk(60);
 	}
 
 	return 0;
