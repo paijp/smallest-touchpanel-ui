@@ -54,7 +54,7 @@ class Target:
     we are trying to observe undisturbed.
     """
 
-    def __init__(self, gdb, elf, port):
+    def __init__(self, gdb, elf, port, host="localhost"):
         self.p = subprocess.Popen(
             [gdb, "-q", "-nx", "--interpreter=mi2", elf],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -62,7 +62,11 @@ class Target:
         )
         self.cmd("set non-stop on")
         self.cmd("set confirm off")
-        self.cmd("target extended-remote localhost:%d" % port)
+        self.cmd("target extended-remote %s:%d" % (host, port))
+        # The server resets and halts the target when it connects, so .data
+        # has not been copied from ROM yet and the header would read as
+        # zeroes. Resume it in the background - which is what non-stop is for.
+        self.cmd("continue &")
 
     def cmd(self, s, timeout=10.0):
         self.p.stdin.write(s + "\n")
@@ -98,11 +102,14 @@ def main():
     ap.add_argument("elf")
     ap.add_argument("--gdb", default="/opt/e2gdb/rx-elf-gdb")
     ap.add_argument("--port", type=int, default=61234)
+    # The GDB server has to run where the emulator is plugged in; gdb does
+    # not, and that machine may be a small VM with no room for it.
+    ap.add_argument("--host", default="localhost")
     ap.add_argument("--interval", type=float, default=0.2)
     args = ap.parse_args()
 
     base = symbol_address(args.elf, args.gdb, "debuglog")
-    t = Target(args.gdb, args.elf, args.port)
+    t = Target(args.gdb, args.elf, args.port, args.host)
 
     magic = t.word(base)
     if magic != MAGIC:
