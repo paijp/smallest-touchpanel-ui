@@ -15,6 +15,7 @@ rebuild and move it around freely.
 """
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -32,7 +33,10 @@ def symbol_address(elf, gdb, name):
     either, since the same script should work if it is ever pointed at a
     target whose ABI does not.
     """
-    nm = gdb.replace("gdb", "nm")
+    # Only the program name, not the whole path: a plain replace also hits
+    # directory names, and the Renesas server lives in one called e2gdb.
+    head, tail = os.path.split(gdb)
+    nm = os.path.join(head, tail[::-1].replace("bdg", "mn", 1)[::-1])
     out = subprocess.run([nm, elf], capture_output=True, text=True).stdout
     wanted = (name, "_" + name)
     for line in out.splitlines():
