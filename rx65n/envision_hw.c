@@ -330,17 +330,33 @@ void	envision_lcd_init(void)
 
 	/* ---- FT5x06 touch controller, on SCI6 in simple-I2C mode ---- */
 
+volatile UW	envision_i2c_trace[ENVISION_I2C_TRACE_N] = {0};
+
+
 /*
 	Wait for a status bit, giving up rather than hanging. Each returns 1 on
 	success and 0 on timeout; a 0 aborts the transaction all the way up, and
 	the caller simply tries again next time round.
+
+	TEND, not TDRE, is what "the frame went out" means here. TDRE is set as
+	soon as the byte moves from TDR to the shift register, which on an I2C
+	bus is long before the ninth clock - so a caller that waited on TDRE and
+	then read the ACK bit would be reading it before the ACK had arrived, and
+	would see every device as absent. That is exactly what the first version
+	of this file did, and the symptom was a board that drew perfectly and
+	never registered a touch. In simple IIC mode the transmit interrupt the
+	reference driver waits on is issued at the end of the acknowledge bit,
+	which is what TEND reports.
+
+	TEND is cleared by writing to TDR, so every caller writes TDR first and
+	waits afterwards.
 */
 static	W	wait_tx(void)
 {
 	UW	n;
 
 	for (n = I2C_TIMEOUT; n > 0; n--)
-		if (SCI6.SSR.BIT.TDRE != 0)
+		if (SCI6.SSR.BIT.TEND != 0)
 			return 1;
 	return 0;
 }
@@ -369,19 +385,26 @@ static	W	start_stop(W stop)
 	SCI6.SIMR3.BYTE = (stop)? 0x53 : 0x51;
 
 	for (n = I2C_TIMEOUT; ; n--) {
-		if (n == 0)
+		if (n == 0) {
+			envision_i2c_trace[4] = (stop)? 2 : 1;
 			return 0;
+		}
 		if (SCI6.SIMR3.BIT.IICSTIF != 0)
 			break;
 	}
 
 	SCI6.SIMR3.BIT.IICSTIF = 0;
 	for (n = I2C_TIMEOUT; ; n--) {
-		if (n == 0)
+		if (n == 0) {
+			envision_i2c_trace[4] = (stop)? 4 : 3;
 			return 0;
+		}
 		if (SCI6.SIMR3.BIT.IICSTIF == 0)
 			break;
 	}
+
+	if (!stop)
+		envision_i2c_trace[3] = SCI6.SIMR3.BYTE;
 
 	if ((stop)) {
 		/* release both lines */
@@ -399,8 +422,23 @@ static	W	start_stop(W stop)
 static	W	write_address(W address, W isread)
 {
 	SCI6.TDR = (UB)((address << 1) | (isread? 1 : 0));
-	if (wait_tx() == 0)
+
+	/*
+		Sampled before the wait, so that a trace can show whether writing
+		TDR actually cleared TEND. If it did not, the wait below returns
+		on the previous frame's completion and everything after it is a
+		frame out of step - the kind of thing that is invisible from the
+		outside and obvious here.
+	*/
+	envision_i2c_trace[0] = SCI6.SSR.BYTE;
+
+	if (wait_tx() == 0) {
+		envision_i2c_trace[4] = 5;
+		envision_i2c_trace[1] = SCI6.SSR.BYTE;
 		return 0;
+	}
+	envision_i2c_trace[1] = SCI6.SSR.BYTE;
+	envision_i2c_trace[2] = SCI6.SISR.BYTE;
 
 	/* IICACKR is the ACK bit as received: 0 means the device answered */
 	return (SCI6.SISR.BIT.IICACKR == 0)? 1 : 0;
@@ -421,6 +459,7 @@ static	W	i2c_write(W address, const UB *data, W length)
 		for (i = 0; i < length; i++) {
 			SCI6.TDR = data[i];
 			if (wait_tx() == 0) {
+				envision_i2c_trace[4] = 6;
 				ret = 0;
 				break;
 			}
@@ -455,12 +494,14 @@ static	W	i2c_read(W address, UB *data, W length)
 			SCI6.TDR = 0xff;
 
 			if (wait_rx() == 0) {
+				envision_i2c_trace[4] = 7;
 				ret = 0;
 				break;
 			}
 			data[i] = SCI6.RDR;
 
 			if (wait_tx() == 0) {
+				envision_i2c_trace[4] = 8;
 				ret = 0;
 				break;
 			}
@@ -555,11 +596,36 @@ void	envision_touch_init(void)
 }
 
 
+W	envision_touch_get_raw(W *x, W *y)
+{
+	UB	buf[7];
+	UB	reg;
+
+	envision_i2c_trace[4] = 0;
+	envision_i2c_trace[6] = PORT0.PIDR.BIT.B2;
+
+	reg = 2;
+	if (i2c_write(TOUCH_I2C_ADDRESS, &reg, 1) == 0)
+		return 0;
+	if (i2c_read(TOUCH_I2C_ADDRESS, buf, sizeof(buf)) == 0)
+		return 0;
+
+	envision_i2c_trace[5] = buf[0];
+	envision_i2c_trace[7]++;
+
+	if (buf[0] == 0)
+		return 0;
+
+	*x = ((W)(buf[1] & 0x0f) << 8) | buf[2];
+	*y = ((W)(buf[3] & 0x0f) << 8) | buf[4];
+
+	return 1;
+}
+
+
 W	envision_touch_get(W *x, W *y)
 {
 	static	W	firsttouch = 0;
-	UB		buf[7];
-	UB		reg;
 
 	/*
 		The panel comes up asserting a contact that never happened. Its
@@ -569,23 +635,12 @@ W	envision_touch_get(W *x, W *y)
 		is polled instead.
 	*/
 	if (firsttouch == 0) {
+		envision_i2c_trace[6] = PORT0.PIDR.BIT.B2;
 		if (PORT0.PIDR.BIT.B2 != 0)
 			return 0;
 		firsttouch = 1;
 		return 0;
 	}
 
-	reg = 2;
-	if (i2c_write(TOUCH_I2C_ADDRESS, &reg, 1) == 0)
-		return 0;
-	if (i2c_read(TOUCH_I2C_ADDRESS, buf, sizeof(buf)) == 0)
-		return 0;
-
-	if (buf[0] == 0)
-		return 0;
-
-	*x = ((W)(buf[1] & 0x0f) << 8) | buf[2];
-	*y = ((W)(buf[3] & 0x0f) << 8) | buf[4];
-
-	return 1;
+	return envision_touch_get_raw(x, y);
 }

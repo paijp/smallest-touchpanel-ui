@@ -40,4 +40,29 @@ void	envision_touch_init(void);
 */
 W	envision_touch_get(W *x, W *y);
 
+/*
+	The same read without the power-up gate, for bring-up: it always puts a
+	transaction on the bus, so the trace below is filled even when the gate
+	would never have opened.
+*/
+W	envision_touch_get_raw(W *x, W *y);
+
+/*
+	Raw state from the last transaction. An I2C failure on a board with no
+	serial port is otherwise completely silent, and this is small enough to
+	leave in permanently:
+
+	  [0] SSR sampled immediately after the address byte went into TDR
+	  [1] SSR when the wait for that frame ended
+	  [2] SISR - bit 0 is IICACKR, 0 meaning the device acknowledged
+	  [3] SIMR3 after the start condition completed
+	  [4] where it gave up: 0 none, 1/3 start, 2/4 stop, 5 address,
+	      6 data write, 7 read, 8 read-frame end
+	  [5] the controller's touch-point count, buf[0]
+	  [6] the touch interrupt line, P02
+	  [7] transactions that completed without a timeout
+*/
+#define	ENVISION_I2C_TRACE_N	8
+extern	volatile UW	envision_i2c_trace[ENVISION_I2C_TRACE_N];
+
 #endif
