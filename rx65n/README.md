@@ -208,9 +208,36 @@ now:   4 32 4 32          <- stops here
 ```
 
 So it opens the device, reads a 4-byte and a 32-byte reply, closes, opens
-again, reads the same two, closes, and reports the emulator unreachable -
-right after identifying it and before the firmware check. Whatever decides
-that is not the transport.
+again, reads the same two, closes, and reports the emulator unreachable.
+Whatever decides that is not the transport.
+
+Capturing the usbip stream itself (`tcpdump` on the tunnel, then decoding the
+URBs) shows what those two replies are, and they are not the vendor protocol
+at all - they are plain USB descriptor reads:
+
+```
+CMD_SUBMIT ep=0 IN len=4    setup=80 06 00 03      GET_DESCRIPTOR string 0
+RET_SUBMIT ep=0    len=4    04 03 09 04            LANGID 0x0409
+CMD_SUBMIT ep=0 IN len=255  setup=80 06 01 03      GET_DESCRIPTOR string 1
+RET_SUBMIT ep=0    len=32   |.E.2.L.:. .O.B.E.0.2.0.0.0.3.|
+```
+
+The emulator identifies itself as **`E2L: OBE020003`** - which is exactly
+what `rfp-cli` reports it as, `E2 emulator Lite (OBE020003)`. The server
+reads that, twice, and gives up.
+
+That places the decision precisely. In the run that connected, the same two
+reads were followed by `libusb_get_config_descriptor` and
+`libusb_claim_interface(0)`, and only then the vendor traffic
+(`2 8 6 6 3 6 2 81 16 9 ...`). Now it never claims the interface and never
+sends a single vendor command. The emulator is answering correctly and
+promptly; the server is rejecting it on identity, before talking to it.
+
+What the identity string looked like on the successful run is not known -
+only transfer sizes were captured then, not payloads. The open question is
+therefore whether this string changes with the firmware mode the emulator is
+in (`rfp-cli` loads programming firmware into it), and whether the debugger
+is looking for a different one.
 
 Tried and made no difference: `-t R5F565NE` and `-t R5F565NE_DUAL`; retry
 intervals from 2s to 18s; warming the path with control transfers first;
