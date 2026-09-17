@@ -170,48 +170,63 @@ Finished target connection
 GDB: 61234
 ```
 
-### Why it then stopped connecting: a 1-second timeout over usbip
+### Why it then stopped connecting: still open
 
-Having connected once, it would not connect again - every start failing with
+Having connected once, it would not connect again. Every start fails with
 "can not connect to the emulator" *before* reading the emulator's firmware
-version, while `rfp-cli` kept working perfectly against the same device over
-the same link.
+version, while `rfp-cli` keeps working perfectly against the same device
+over the same link, immediately before and after.
 
-`LIBUSB_DEBUG=4` shows exactly what happens:
+A first look at `LIBUSB_DEBUG=4` suggested a timeout, and it is worth
+recording because the numbers are real even though the conclusion was wrong.
+The first control transfer after `libusb_open` can take ~1.5s and libusb is
+given 1000ms:
 
 ```
 0.179  libusb_open 1.10
 0.182  submit_transfer
-1.647  status=-2  transferred=4     <- 1.47s: cancelled, timed out
-1.648  libusb_close
+1.647  status=-2  transferred=4     <- cancelled, timed out
 1.650  libusb_open                     (the server's own retry)
 1.810  status=0   transferred=4     <- 0.16s
 1.908  status=0   transferred=32    <- 0.10s
-1.910  libusb_close                    ... and it gives up anyway
 ```
 
-The **first** control transfer after `libusb_open` takes about 1.5 seconds;
-libusb allows it 1000ms. Everything after it completes in about 0.1s. The
-server does retry, and the retry succeeds - but it has already decided the
-emulator is unreachable.
+In the run that *did* connect, that same first transfer took 0.996s - four
+milliseconds inside the limit. So the device really does take about a second
+to answer its first vendor command after idling, and this path (a
+TCG-emulated VM, slirp, a container, an SSH tunnel, a Raspberry Pi) really
+does sit on the edge of the deadline.
 
-The path is long: a TCG-emulated VM, through slirp, through a container,
-through an SSH tunnel, to a Raspberry Pi, to the device. `rfp-cli` is
-unaffected because it allows its transfers far more time.
+But that is not what is stopping it now. A later capture shows the first
+transfer completing in 0.846s, comfortably inside the limit, with the
+transfer sizes matching the good run's opening exactly - and the server
+still gives up:
 
-What does *not* fix it: warming the path with control transfers immediately
-beforehand, retrying (15 consecutive attempts, all identical), a physical
-USB re-plug, `usbip` detach/attach, `usbip` unbind/bind on the server side,
-or toggling the device's `authorized` flag for a fresh enumeration.
+```
+good:  4 32 4 32 2 8 6 6 3 6 2 81 16 9 2 22 ...
+now:   4 32 4 32          <- stops here
+```
 
-So the connection that did succeed was won on timing, and the timing has
-since gone the other way and stayed there. Anyone reproducing this should
-shorten the path rather than fight it: run `e2-server-gdb` on a machine with
-the emulator plugged into it directly, or at least without an SSH tunnel and
-an emulated CPU in the way. The option set above is correct and is the part
-worth taking away; the transport is what defeats it here.
+So it opens the device, reads a 4-byte and a 32-byte reply, closes, opens
+again, reads the same two, closes, and reports the emulator unreachable -
+right after identifying it and before the firmware check. Whatever decides
+that is not the transport.
 
-Until then the screen is the debug channel that works, which is what diag1.c
+Tried and made no difference: `-t R5F565NE` and `-t R5F565NE_DUAL`; retry
+intervals from 2s to 18s; warming the path with control transfers first;
+fifteen consecutive attempts; a physical USB re-plug; `usbip`
+detach/attach, unbind/bind, and an `authorized` toggle for a fresh
+enumeration; running as root and as an ordinary user. There is an
+`LD_PRELOAD` shim in this repo's history for raising libusb's deadline,
+written for the timeout theory - it is sound and may be useful on a slower
+link, but it does not fix this.
+
+The option set above is correct and is the part worth taking away. Anyone
+picking this up should shorten the path - run `e2-server-gdb` on a machine
+with the emulator plugged into it directly - rather than fight it from the
+far end of a tunnel.
+
+Meanwhile the screen is the debug channel that works, which is what diag1.c
 is for.
 
 ### -uWorkRamAddress and the log
