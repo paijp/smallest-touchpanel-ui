@@ -88,10 +88,29 @@
 /* set by i2cscl_high() when a device held the clock past the limit */
 static	W	i2c_stretch_timeouts = 0;
 
+extern	void	(*lcdtp_polltask)();		/* lcdtp.c */
 
+
+/*
+	Half a bit, and the caller's poll task while we are waiting anyway.
+
+	Safe, and worth doing. I2C is clocked by the master, so stretching any
+	phase of it is legal - the bus has no minimum clock and a slave has
+	nothing of its own to keep in step with. The one rule is the obvious
+	one: whatever runs in here must not touch SDA or SCL. Moving SDA while
+	SCL is high is a start or a stop condition, which would end the
+	transaction underneath us.
+
+	Worth doing because a transaction is about 2ms, and a serial port left
+	unread for 2ms can lose bytes. That is the job lcdtp_polltask() exists
+	for, and it should not be starved by a touch read.
+*/
 static	void	i2cwait(void)
 {
 	volatile W	i;
+
+	if ((lcdtp_polltask))
+		lcdtp_polltask();
 
 	for (i = 0; i < I2C_HALFBIT; i++)
 		;
