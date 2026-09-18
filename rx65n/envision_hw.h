@@ -61,8 +61,9 @@ W	envision_touch_get_raw(W *x, W *y);
 	  [5] the controller's touch-point count, buf[0]
 	  [6] the touch interrupt line, P02
 	  [7] transactions that completed without a timeout
+	  [8..14] the seven bytes of the last successful read, as received
 */
-#define	ENVISION_I2C_TRACE_N	8
+#define	ENVISION_I2C_TRACE_N	16
 extern	volatile UW	envision_i2c_trace[ENVISION_I2C_TRACE_N];
 
 #endif

@@ -28,7 +28,9 @@
 
 static	const	char	*label[ENVISION_I2C_TRACE_N] = {
 	"ssr@tdr ", "ssr@end ", "sisr    ", "simr3   ",
-	"gaveup  ", "points  ", "int p02 ", "ok count"
+	"gaveup  ", "points  ", "int p02 ", "ok count",
+	"raw[0]  ", "raw[1]  ", "raw[2]  ", "raw[3]  ",
+	"raw[4]  ", "raw[5]  ", "raw[6]  ", "        "
 };
 
 
@@ -83,8 +85,8 @@ int	main(void)
 		*/
 		changed = 0;
 		for (i = 0; i < ENVISION_I2C_TRACE_N; i++)
-			if (envision_i2c_trace[i] != prev[i])
-				changed = 1;
+			if (i != 7 && envision_i2c_trace[i] != prev[i])
+				changed = 1;	/* [7] is a counter; it always changes */
 
 		for (i = 0; i < ENVISION_I2C_TRACE_N; i++) {
 			gfil_rec(8, 28 + i * 14, 240, 42 + i * 14, 0x0000);
@@ -126,16 +128,16 @@ int	main(void)
 			finger is down cannot be read by the person whose finger
 			it is.
 		*/
-		gfil_rec(260, 28, 460, 100, 0x0000);
-		gdra_stp(260, 40, 0x07ff, 0x0000, NULL, (UB*)"touches");
+		gfil_rec(260, 100, 460, 160, 0x0000);
+		gdra_stp(260, 112, 0x07ff, 0x0000, NULL, (UB*)"touches");
 		dec5(touches, line);
-		gdra_stp(350, 40, 0x07ff, 0x0000, NULL, line);
-		gdra_stp(260, 54, 0x07ff, 0x0000, NULL, (UB*)"last x");
+		gdra_stp(350, 112, 0x07ff, 0x0000, NULL, line);
+		gdra_stp(260, 126, 0x07ff, 0x0000, NULL, (UB*)"last x");
 		dec5(lastx, line);
-		gdra_stp(350, 54, 0x07ff, 0x0000, NULL, line);
-		gdra_stp(260, 68, 0x07ff, 0x0000, NULL, (UB*)"last y");
+		gdra_stp(350, 126, 0x07ff, 0x0000, NULL, line);
+		gdra_stp(260, 140, 0x07ff, 0x0000, NULL, (UB*)"last y");
 		dec5(lasty, line);
-		gdra_stp(350, 68, 0x07ff, 0x0000, NULL, line);
+		gdra_stp(350, 140, 0x07ff, 0x0000, NULL, line);
 
 		dly_tsk(60);
 	}

@@ -655,6 +655,12 @@ W	envision_touch_get_raw(W *x, W *y)
 
 	envision_i2c_trace[5] = buf[0];
 	envision_i2c_trace[7]++;
+	{
+		W	i;
+
+		for (i = 0; i < 7; i++)
+			envision_i2c_trace[8 + i] = buf[i];
+	}
 
 	if (buf[0] == 0)
 		return 0;
