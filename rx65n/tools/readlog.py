@@ -60,6 +60,13 @@ class Target:
             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT, text=True, bufsize=1,
         )
+        # gdb prints a prompt before it has been asked anything. cmd() reads
+        # up to the next prompt, so without swallowing this one first every
+        # reply would be paired with the *previous* command, and the memory
+        # read would be handed the output of the connect instead of its own
+        # - which is precisely how the first run of this read nothing and
+        # reported it as a zero magic.
+        self.wait_prompt()
         self.cmd("set non-stop on")
         self.cmd("set confirm off")
         self.cmd("target extended-remote %s:%d" % (host, port))
@@ -67,9 +74,7 @@ class Target:
         # attaches to the target as it is - running, if it was running - and
         # a `continue` against a running thread is an error, not a no-op.
 
-    def cmd(self, s, timeout=10.0):
-        self.p.stdin.write(s + "\n")
-        self.p.stdin.flush()
+    def wait_prompt(self, timeout=10.0):
         out, deadline = [], time.time() + timeout
         while time.time() < deadline:
             line = self.p.stdout.readline()
@@ -79,6 +84,11 @@ class Target:
             if line.startswith("(gdb)"):
                 break
         return "".join(out)
+
+    def cmd(self, s, timeout=10.0):
+        self.p.stdin.write(s + "\n")
+        self.p.stdin.flush()
+        return self.wait_prompt(timeout)
 
     def read(self, addr, count):
         """Read count bytes. Returns None if the target refused.
