@@ -69,7 +69,18 @@ class Target:
         self.wait_prompt()
         self.cmd("set non-stop on")
         self.cmd("set confirm off")
+        # Some gdb versions send an interrupt the moment they attach, which
+        # halts a target the server was willing to leave running: the server
+        # can be configured perfectly and the program still stops. OpenOCD
+        # documents this as the first step of using gdb as a non-intrusive
+        # memory inspector, and it is a property of gdb, not of any one
+        # server, so it belongs here rather than in the launch line.
+        self.cmd("set remote interrupt-on-connect off")
         self.cmd("target extended-remote %s:%d" % (host, port))
+        # Reading a running target means gdb may not probe flash to build a
+        # memory map; without this a read of a perfectly valid address can be
+        # refused by gdb itself before it ever reaches the wire.
+        self.cmd("set mem inaccessible-by-default off")
         # No resume here. With the option set in the README the server
         # attaches to the target as it is - running, if it was running - and
         # a `continue` against a running thread is an error, not a no-op.
