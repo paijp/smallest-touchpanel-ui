@@ -69,13 +69,21 @@ int	main(void)
 	W	x, y, touched, i, changed;
 
 	init_lcdtp();
+	/* let the controller finish coming up before anyone asks it anything */
+	dly_tsk(500);
 	gfil_rec(0, 0, LCD_W, LCD_H, 0x0000);
-	gdra_stp(8, 20, 0x07e0, 0x0000, NULL, (UB*)"rx65n touch diag 2 (isr)");
+	gdra_stp(8, 20, 0x07e0, 0x0000, NULL, (UB*)"rx65n touch diag 3 (gated)");
 	lcdtp_sendlogs("diag1 up\n");
 
 	for (;;) {
 		x = y = -1;
-		touched = envision_touch_get_raw(&x, &y);
+		/*
+			Through the gate this time, as the real driver reads: no
+			transaction goes out until the interrupt line has been seen
+			low once. The trace still shows the line (int p02) on every
+			pass, so the log records when - whether - the gate opens.
+		*/
+		touched = envision_touch_get(&x, &y);
 
 		/*
 			Log only what changed. At eight lines a pass the ring

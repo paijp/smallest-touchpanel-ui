@@ -508,7 +508,15 @@ void	envision_touch_init(void)
 	PORT0.PODR.BIT.B7 = 0;
 	envision_delay_ms(2);
 	PORT0.PODR.BIT.B7 = 1;
-	envision_delay_ms(100);
+	/*
+		The reference waits 100ms here. The FT5x06 is documented as needing
+		on the order of 300ms after reset before it will talk sensibly,
+		and the reference gets away with less only because it never reads
+		the controller until the interrupt line has gone low once - which
+		is hundreds of milliseconds later anyway. Wait it out here so the
+		gate is a safety net rather than the thing holding everything up.
+	*/
+	envision_delay_ms(300);
 
 	/* P00/P01 to SSCL6/SSDA6 */
 	MPC.PWPR.BIT.B0WI = 0;
