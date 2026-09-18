@@ -27,7 +27,7 @@
 
 
 static	const	char	*label[ENVISION_I2C_TRACE_N] = {
-	"ssr@tdr ", "ssr@end ", "sisr    ", "simr3   ",
+	"nak wr  ", "nak rd  ", "stretch ", "        ",
 	"gaveup  ", "points  ", "int p02 ", "ok count",
 	"raw[0]  ", "raw[1]  ", "raw[2]  ", "raw[3]  ",
 	"raw[4]  ", "raw[5]  ", "raw[6]  ", "        "
@@ -72,7 +72,7 @@ int	main(void)
 	/* let the controller finish coming up before anyone asks it anything */
 	dly_tsk(500);
 	gfil_rec(0, 0, LCD_W, LCD_H, 0x0000);
-	gdra_stp(8, 20, 0x07e0, 0x0000, NULL, (UB*)"rx65n touch diag 3 (gated)");
+	gdra_stp(8, 20, 0x07e0, 0x0000, NULL, (UB*)"rx65n touch diag 4 (bitbang)");
 	lcdtp_sendlogs("diag1 up\n");
 
 	for (;;) {
