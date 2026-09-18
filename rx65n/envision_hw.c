@@ -37,14 +37,22 @@
 
 	1. The I2C driver polls the status flags instead of waiting on interrupt
 	   handlers. The original spins on flags set by INT_Excep_SCI6_RXI6,
-	   INT_Excep_SCI6_TXI6 and INT_Excep_ICU_GROUPBL0, which is the same
-	   hardware condition reached the long way round: with SIMR2.IICINTM = 1
-	   the TXI and RXI requests are just SSR.TDRE and SSR.RDRF, and the group
-	   BL0 handler does nothing but clear and report SIMR3.IICSTIF. Polling
-	   those three flags directly removes the dependency on a particular
-	   inthandler.c, and removes a real bug with it: a flag left set by a
-	   transaction that was abandoned part way through makes the *next*
-	   transaction return immediately with stale data.
+	   INT_Excep_SCI6_TXI6 and INT_Excep_ICU_GROUPBL0. Polling removes the
+	   dependency on a particular inthandler.c, and removes a real bug: a
+	   flag left set by a transaction abandoned part way through makes the
+	   *next* transaction return immediately with stale data.
+
+	   It is not, however, the same thing as the interrupts, and two of the
+	   differences bit on hardware. The TXI request in simple IIC mode is
+	   raised after the acknowledge bit; SSR.TDRE is set long before it, and
+	   even SSR.TEND alone returned early, so the ACK slot was read before
+	   the device had driven it and every address looked NACKed - wait_tx()
+	   now requires TDRE and TEND together. And the receive interrupt's
+	   handler reads RDR, which clears RDRF as a side effect; RDRF is already
+	   set by the time the address frame is done, so a polled read loop that
+	   does not discard it starts one byte early and every byte after it is
+	   one position out - drain_rx() does the discarding. Both were found by
+	   reading the trace below off the board, not by reasoning about it.
 
 	   The peripheral configuration itself is unchanged, down to SCR = 0xb4:
 	   the interrupt requests are still generated, they are simply never

@@ -63,10 +63,9 @@ class Target:
         self.cmd("set non-stop on")
         self.cmd("set confirm off")
         self.cmd("target extended-remote %s:%d" % (host, port))
-        # The server resets and halts the target when it connects, so .data
-        # has not been copied from ROM yet and the header would read as
-        # zeroes. Resume it in the background - which is what non-stop is for.
-        self.cmd("continue &")
+        # No resume here. With the option set in the README the server
+        # attaches to the target as it is - running, if it was running - and
+        # a `continue` against a running thread is an error, not a no-op.
 
     def cmd(self, s, timeout=10.0):
         self.p.stdin.write(s + "\n")
@@ -82,15 +81,19 @@ class Target:
         return "".join(out)
 
     def read(self, addr, count):
-        """Read count bytes. Returns None if the target refused."""
-        txt = self.cmd("x/%dxb 0x%x" % (count, addr))
-        data = bytearray()
-        for line in txt.splitlines():
-            if ":" not in line:
-                continue
-            for tok in re.findall(r"0x([0-9a-fA-F]{1,2})\b", line.split(":", 1)[1]):
-                data.append(int(tok, 16))
-        return bytes(data[:count]) if len(data) >= count else None
+        """Read count bytes. Returns None if the target refused.
+
+        MI's own memory command rather than `x`: it answers with one
+        contents="..." hex string, where `x` answers with CLI text that MI
+        wraps, escapes and interleaves with warnings, and parsing that back
+        out is exactly what went wrong the first time this ran for real.
+        """
+        txt = self.cmd("-data-read-memory-bytes 0x%x %d" % (addr, count))
+        m = re.search(r'contents="([0-9a-fA-F]+)"', txt)
+        if not m:
+            return None
+        data = bytes.fromhex(m.group(1))
+        return data[:count] if len(data) >= count else None
 
     def word(self, addr):
         b = self.read(addr, 4)
@@ -112,9 +115,13 @@ def main():
     t = Target(args.gdb, args.elf, args.port, args.host)
 
     magic = t.word(base)
+    if magic is None:
+        sys.exit("could not read target memory at 0x%08x -- is the GDB "
+                 "server up, and has it already served its one session?"
+                 % base)
     if magic != MAGIC:
         sys.exit("bad magic 0x%08x at 0x%08x -- wrong .elf, or the target "
-                 "has not started" % (magic or 0, base))
+                 "has not started" % (magic, base))
     size = t.word(base + 4)
 
     # Start from where the target is now rather than replaying the buffer: on

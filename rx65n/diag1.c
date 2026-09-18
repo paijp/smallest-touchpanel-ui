@@ -49,12 +49,9 @@ static	void	dec5(W v, UB *p)
 {
 	W	i;
 
-	if (v < 0) {
-		v = 0;
-		p[0] = '-';
-	}
+	/* "-1" is the not-yet value; it has to survive as a visible dash */
 	for (i = 4; i >= 0; i--) {
-		p[i] = (UB)('0' + (v % 10));
+		p[i] = (UB)((v < 0)? '-' : '0' + (v % 10));
 		v /= 10;
 	}
 	p[5] = 0;

@@ -108,174 +108,133 @@ The alternative, writing to data flash and halting to dump it with
 wears the flash, and is far too slow for anything chatty.
 
 ```bash
-e2-server-gdb -g E2LITE -t R5F565NE -p 61234 -d 61236 \
-    -uAllowRRMDMM=1 -uWorkRamAddress=0x90000 -n 0 &
-python3 tools/readlog.py lcdtp.elf
-```
-
-`-uWorkRamAddress` matters more than it looks. The device description in
-e2 studio's `e2_devices.xml` puts this target's debugger work RAM at 0x1000
-for 1280 bytes, which is inside `.data` - and `.data` is where the ring
-buffer lives, from 0x504. Left at the default the debugger would quietly
-overwrite the log it was being used to read. Internal RAM runs to 0xA0000
-and the program ends below 0x2000, so anywhere high is safe.
-
-### Connecting: the full option set, not the interface
-
-This is the invocation that works. It is not a tidied-up version of the
-Renesas documentation - it is what e2 studio itself generates, and the
-details matter:
-
-```bash
-e2-server-gdb -g E2LITE -t R5F565NE -p 61234 -d 61236 \
+# where the emulator is plugged in
+rm -f /dev/shm/sem.CommuniDLL_USB_Semaphore*      # see "one session, one server"
+e2-server-gdb -g E2LITE -t R5F565NE_DUAL -p 61234 -d 61236 \
     -uConnectionTimeout= 30 -uClockSrcHoco= 1 -uPTimerClock= 120000000 \
     -uAllowClockSourceInternal= 1 -uUseFine= 0 -uJTagClockFreq= 6.00 \
     -w 0 -z 0 -uRegisterSetting= 0 -uModePin= 0 \
     -uChangeStartupBank= 0 -uStartupBank= 0 -uDebugMode= 0 \
     -uExecuteProgram= 0 -uIdCode= FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF \
-    -uresetOnReload= 1 -n 0 -uWorkRamAddress= 1000 \
+    -uresetOnReload= 1 -n 0 -uWorkRamAddress= 8000 \
     -uverifyOnWritingMemory= 0 -uProgReWriteIRom= 0 -uProgReWriteDFlash= 0 \
-    -uhookWorkRamAddr= 0x7fb40 -uhookWorkRamSize= 0x4c0 \
+    -uhookWorkRamAddr= 0x3fdd0 -uhookWorkRamSize= 0x230 \
     -uOSRestriction= 0 -l -uCore= 'SINGLE_CORE|enabled|1|main' \
-    -uSyncMode= async -uFirstGDB= main -uAllowRRMDMM= 1
+    -uSyncMode= async -uFirstGDB= main -uAllowRRMDMM= 1 &
+
+# anywhere that can reach port 61234 and has a GNU RX gdb
+python3 tools/readlog.py lcdtp.elf --gdb rx-elf-gdb --host <that machine>
 ```
 
-**The space after each `=` is load-bearing.** The value is a separate argv
-element. Written the ordinary way, `-uUseFine=1` is an option with an empty
-value and is silently ignored - it does not even reach the emulator. Two
-runs, one with it and one without, captured under `LIBUSB_DEBUG=4`, produce
-an identical 56-transfer conversation byte-count for byte-count.
+That is what e2 studio itself generates for this board, with three edits:
+`-uAllowRRMDMM= 1`, the work RAM moved (below), and `_DUAL`, which is the
+part on the Envision Kit. Everything about it that looks odd is
+load-bearing.
 
-That detail cost a long detour. Every attempt of the form `-uOption=value`
-failed at
+### The space after `=`
+
+Each value is a separate argv element. Written the ordinary way,
+`-uUseFine=1` is an option with an empty value and is silently ignored - it
+never reaches the emulator: two runs, with and without it, captured under
+`LIBUSB_DEBUG=4`, are the identical 56-transfer conversation. Every attempt
+of the form `-uOption=value` fails at
 
 ```
 E20_set_clk() Failed
 RxTargetDevice::startConnection() Rx_Init_E1_E20() Failed
 ```
 
-which reads like a clock or interface problem and is neither: with the
+which reads like a clock or interface problem and is neither; with the
 values attached rather than passed, the server had almost no settings at
-all. The interface in particular is a red herring - **JTAG at 6.00MHz is
-what this board wants**, not FINE, despite FINE being the obvious choice for
-an E2 Lite on RX. A successful connection looks like this:
+all. The interface in particular is a red herring: **JTAG at 6.00MHz** is
+what this board wants, not FINE, for all that FINE is the obvious choice for
+an E2 Lite on RX. Connected, it reports:
 
 ```
 Firmware up to date at version '1.12.00.001'
         Target endian (MDE pin)    : little
   Emulator Board Revision       E2LITE  Rev.0
   User Vcc                      3.28711 V
-  USB Bus Power                 4.83237 V
 Finished target connection
 GDB: 61234
 ```
 
-### Why it then stopped connecting: still open
+### One session, one server, and the semaphore it leaves behind
 
-Having connected once, it would not connect again. Every start fails with
-"can not connect to the emulator" *before* reading the emulator's firmware
-version, while `rfp-cli` keeps working perfectly against the same device
-over the same link, immediately before and after.
-
-A first look at `LIBUSB_DEBUG=4` suggested a timeout, and it is worth
-recording because the numbers are real even though the conclusion was wrong.
-The first control transfer after `libusb_open` can take ~1.5s and libusb is
-given 1000ms:
+`libCommuni.so` takes a POSIX named semaphore for the emulator, keyed by
+its USB serial:
 
 ```
-0.179  libusb_open 1.10
-0.182  submit_transfer
-1.647  status=-2  transferred=4     <- cancelled, timed out
-1.650  libusb_open                     (the server's own retry)
-1.810  status=0   transferred=4     <- 0.16s
-1.908  status=0   transferred=32    <- 0.10s
+/dev/shm/sem.CommuniDLL_USB_SemaphoreE2L: OBE020003
 ```
 
-In the run that *did* connect, that same first transfer took 0.996s - four
-milliseconds inside the limit. So the device really does take about a second
-to answer its first vendor command after idling, and this path (a
-TCG-emulated VM, slirp, a container, an SSH tunnel, a Raspberry Pi) really
-does sit on the edge of the deadline.
+It is released on a clean exit. Kill a connected server instead and it
+stays taken, and from then on every start reads the emulator's serial
+(two `GET_DESCRIPTOR` string requests, and nothing else on the wire),
+fails to take the semaphore, and reports "can not connect to the emulator"
+without ever claiming the USB interface. Nothing on the device side clears
+it - not a physical re-plug, not `usbip` detach/attach or unbind/bind, not
+a forced re-enumeration - because it is a file on the host. `rfp-cli`
+works throughout, which is what makes it look like anything but this.
+Delete the file.
 
-But that is not what is stopping it now. A later capture shows the first
-transfer completing in 0.846s, comfortably inside the limit, with the
-transfer sizes matching the good run's opening exactly - and the server
-still gives up:
+This cost most of a day, and the diagnosis went through a timeout theory
+first: the first control transfer after `libusb_open` does take ~1.0-1.5s
+down this path (an emulated VM, slirp, a container, an SSH tunnel, a Pi)
+against libusb's 1000ms, and the one run that had connected had made it
+with 4ms to spare. Real, worth knowing about, and not the cause: a run
+whose first transfer completed in 0.85s failed identically.
+
+Two consequences for how it is run. The server serves **one** gdb session
+and then stops listening on its port; start a new server for each
+`readlog.py`. And a server should be stopped with a clean gdb disconnect
+where possible, or the semaphore removed before the next start - the
+`rm -f` above is not optional after a `kill`.
+
+It also attaches to the target as it finds it: a target `rfp-cli -run`
+left running is still running, `info threads` says so, and the ring buffer
+header is intact when the first read arrives. `readlog.py` therefore does
+not `continue`; against a running thread that is an error.
+
+### -uWorkRamAddress
+
+e2 studio passes `1000` (hex, no prefix - the device description says
+`workRamStart="4096"`): 1280 bytes of debugger work RAM at 0x1000. That is
+inside `.data`, and `.data` is where the ring buffer lives, from 0x504 to
+0x1514. `8000` puts it at 0x8000, well above the program (which ends below
+0x2000; internal RAM runs to 0xA0000).
+
+### Where gdb runs
+
+The GDB server has to run where the emulator is plugged in. gdb does not,
+and the small VM this was done in could not hold both: with the server up,
+both the Renesas `rx-elf-gdb` and GNU RX's segfaulted at startup with
+~75MB free. `readlog.py --host` lets gdb run on the build machine; it also
+needs the matching `rx-elf-nm` beside it, and GNU RX's gdb wants
+`libmpfr6`.
+
+`readlog.py` reads memory with MI's `-data-read-memory-bytes` rather than
+`x`. The first version parsed `x` output and silently got nothing back
+through MI's quoting; a read failure now says so instead of printing a
+zero magic.
+
+### What the log said
+
+The first thing this channel was used for was the touch driver, and it
+answered in one screen. Eight identical lines per pass:
 
 ```
-good:  4 32 4 32 2 8 6 6 3 6 2 81 16 9 2 22 ...
-now:   4 32 4 32          <- stops here
+ssr@tdr  00000040     RDRF already set, right after the address byte
+ssr@end  000000c0     TDRE and RDRF set, TEND clear, when the wait returned
+sisr     00000015     IICACKR = 1: the controller NACKed its address
+gaveup   00000000     no timeout anywhere
+ok count 00000000     not one transaction completed
 ```
 
-So it opens the device, reads a 4-byte and a 32-byte reply, closes, opens
-again, reads the same two, closes, and reports the emulator unreachable.
-Whatever decides that is not the transport.
-
-Capturing the usbip stream itself (`tcpdump` on the tunnel, then decoding the
-URBs) shows what those two replies are, and they are not the vendor protocol
-at all - they are plain USB descriptor reads:
-
-```
-CMD_SUBMIT ep=0 IN len=4    setup=80 06 00 03      GET_DESCRIPTOR string 0
-RET_SUBMIT ep=0    len=4    04 03 09 04            LANGID 0x0409
-CMD_SUBMIT ep=0 IN len=255  setup=80 06 01 03      GET_DESCRIPTOR string 1
-RET_SUBMIT ep=0    len=32   |.E.2.L.:. .O.B.E.0.2.0.0.0.3.|
-```
-
-The emulator identifies itself as **`E2L: OBE020003`** - which is exactly
-what `rfp-cli` reports it as, `E2 emulator Lite (OBE020003)`. The server
-reads that, twice, and gives up.
-
-That places the decision precisely. In the run that connected, the same two
-reads were followed by `libusb_get_config_descriptor` and
-`libusb_claim_interface(0)`, and only then the vendor traffic
-(`2 8 6 6 3 6 2 81 16 9 ...`). Now it never claims the interface and never
-sends a single vendor command. The emulator is answering correctly and
-promptly; the server is rejecting it on identity, before talking to it.
-
-What the identity string looked like on the successful run is not known -
-only transfer sizes were captured then, not payloads. The open question is
-therefore whether this string changes with the firmware mode the emulator is
-in (`rfp-cli` loads programming firmware into it), and whether the debugger
-is looking for a different one.
-
-Tried and made no difference: `-t R5F565NE` and `-t R5F565NE_DUAL`; retry
-intervals from 2s to 18s; warming the path with control transfers first;
-fifteen consecutive attempts; a physical USB re-plug; `usbip`
-detach/attach, unbind/bind, and an `authorized` toggle for a fresh
-enumeration; running as root and as an ordinary user. There is an
-`LD_PRELOAD` shim in this repo's history for raising libusb's deadline,
-written for the timeout theory - it is sound and may be useful on a slower
-link, but it does not fix this.
-
-The option set above is correct and is the part worth taking away. Anyone
-picking this up should shorten the path - run `e2-server-gdb` on a machine
-with the emulator plugged into it directly - rather than fight it from the
-far end of a tunnel.
-
-Meanwhile the screen is the debug channel that works, which is what diag1.c
-is for.
-
-### -uWorkRamAddress and the log
-
-e2 studio passes `-uWorkRamAddress= 1000`, from this target's entry in
-`e2_devices.xml`: work RAM at 0x1000 for 1280 bytes. That is inside `.data`,
-and `.data` is where the ring buffer lives, from 0x504 - so as configured,
-the debugger overwrites the log it is being used to read. Internal RAM runs
-to 0xA0000 and the program ends below 0x2000, so there is plenty of room
-higher up; moving the buffer in the firmware is the sounder fix, since the
-server's own value is the one e2 studio and the device description agree on.
-
-The buffer's address is resolved from the `.elf` with `nm`, so nothing is
-hardcoded and it can move freely between builds. (The RX ABI prefixes C
-symbols with an underscore, so the symbol is `_debuglog`; the script accepts
-either spelling.)
-
-`lcdtp_sendlogs`, `lcdtp_sendlogdec`, `lcdtp_sendlogun`, `lcdtp_sendlogub`,
-`lcdtp_sendloguh` and `lcdtp_sendloguw` are pure formatting on top of
-`lcdtp_sendlogc` and are byte-identical across the ports, so they live in
-`lcdtp.c` here as they do elsewhere; only `lcdtp_sendlogc` is in
-`debuglog.c`.
+Two bugs, both in the polled I2C, both visible here and neither guessable:
+the transmit wait returned before the acknowledge bit and read it too
+early, and a receive flag left over from the address frame made every read
+start one byte early. See the note at the top of `envision_hw.c`.
 
 ### How the ring buffer stays consistent without a lock
 
