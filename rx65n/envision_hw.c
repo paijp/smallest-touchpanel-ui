@@ -35,28 +35,14 @@
 
 	Three things are deliberately different from the original:
 
-	1. The I2C driver polls the status flags instead of waiting on interrupt
-	   handlers. The original spins on flags set by INT_Excep_SCI6_RXI6,
-	   INT_Excep_SCI6_TXI6 and INT_Excep_ICU_GROUPBL0. Polling removes the
-	   dependency on a particular inthandler.c, and removes a real bug: a
-	   flag left set by a transaction abandoned part way through makes the
-	   *next* transaction return immediately with stale data.
-
-	   It is not, however, the same thing as the interrupts, and two of the
-	   differences bit on hardware. The TXI request in simple IIC mode is
-	   raised after the acknowledge bit; SSR.TDRE is set long before it, and
-	   even SSR.TEND alone returned early, so the ACK slot was read before
-	   the device had driven it and every address looked NACKed - wait_tx()
-	   now requires TDRE and TEND together. And the receive interrupt's
-	   handler reads RDR, which clears RDRF as a side effect; RDRF is already
-	   set by the time the address frame is done, so a polled read loop that
-	   does not discard it starts one byte early and every byte after it is
-	   one position out - drain_rx() does the discarding. Both were found by
-	   reading the trace below off the board, not by reasoning about it.
-
-	   The peripheral configuration itself is unchanged, down to SCR = 0xb4:
-	   the interrupt requests are still generated, they are simply never
-	   enabled in the ICU, so they accumulate in IR and are ignored.
+	1. The I2C driver clears its three interrupt flags at the start of
+	   every transaction. Nothing in the original does, and a flag left
+	   set by a transaction abandoned part way through makes the next one
+	   return immediately with stale data - "first touch fine, second touch
+	   nothing, board frozen" on hardware. (A polled rewrite was tried
+	   first and abandoned: it read the acknowledge bit too early and the
+	   data one byte out, and finally returned one stale frame for ever.
+	   The interrupt-driven form is what is known to work on this board.)
 
 	2. Every wait is bounded. The original's waits are `while (!flag) {}`,
 	   so a missing ACK - or a touch controller that has stopped answering -
@@ -338,117 +324,76 @@ void	envision_lcd_init(void)
 
 	/* ---- FT5x06 touch controller, on SCI6 in simple-I2C mode ---- */
 
+/*
+	Interrupt-driven, exactly as the reference driver is, because the
+	polled version was wrong on hardware in ways that took a debugger to
+	see. The three handlers live in the startup code's inthandler.c and do
+	the right things already: RXI6 reads RDR into received_byte (clearing
+	RDRF on the way) and raises rx_complete_interrupt_flag; TXI6 raises
+	tx_complete_interrupt_flag; group BL0 clears SIMR3.IICSTIF and raises
+	start_complete_interrupt_flag. This file only enables them in the ICU
+	and waits on the flags.
+
+	Two things the reference driver did not do. The flags are cleared at
+	the start of every transaction - left set by one abandoned part way
+	through, they make the next return at once with stale data, which is
+	the "first touch fine, second touch nothing" of the original. And every
+	wait is bounded, so a device that stops answering costs a frame, not
+	the program.
+*/
+#include	<stdbool.h>
+#include	<stdint.h>
+
+extern	volatile bool		rx_complete_interrupt_flag;
+extern	volatile bool		tx_complete_interrupt_flag;
+extern	volatile bool		start_complete_interrupt_flag;
+extern	volatile uint8_t	received_byte;
+
 volatile UW	envision_i2c_trace[ENVISION_I2C_TRACE_N] = {0};
 
 
-/*
-	Wait for a status bit, giving up rather than hanging. Each returns 1 on
-	success and 0 on timeout; a 0 aborts the transaction all the way up, and
-	the caller simply tries again next time round.
-
-	"The frame went out" has to mean the ninth clock has been and gone,
-	because write_address() reads the acknowledge bit immediately after.
-	TDRE alone does not mean that: it is set as soon as the byte moves from
-	TDR into the shift register, long before the ACK on an I2C bus, so a
-	caller that waits on TDRE reads the ACK slot before the device has
-	driven it and concludes every device is absent.
-
-	Waiting on TEND alone did not do it either. On hardware the trace showed
-	the wait returning with SSR = 0xc0 - TDRE and RDRF set, TEND clear - and
-	the ACK bit then reading as a NACK on every single transaction, which is
-	the same failure by a different route.
-
-	So require both. TDRE and TEND together cannot be true before the frame
-	has finished, whatever the ordering of the individual flags, and both
-	are cleared by the write to TDR that precedes every call.
-*/
-#define	SSR_TDRE	0x80
-#define	SSR_TEND	0x04
-
-static	W	wait_tx(void)
+static	W	wait_flag(volatile bool *flag, W site)
 {
 	UW	n;
 
 	for (n = I2C_TIMEOUT; n > 0; n--)
-		if ((SCI6.SSR.BYTE & (SSR_TDRE | SSR_TEND)) ==
-		    (SSR_TDRE | SSR_TEND))
+		if ((*flag)) {
+			*flag = false;
 			return 1;
+		}
+	envision_i2c_trace[4] = site;
 	return 0;
 }
 
 
-static	W	wait_rx(void)
+static	void	clear_flags(void)
 {
-	UW	n;
-
-	for (n = I2C_TIMEOUT; n > 0; n--)
-		if (SCI6.SSR.BIT.RDRF != 0)
-			return 1;
-	return 0;
+	rx_complete_interrupt_flag = false;
+	tx_complete_interrupt_flag = false;
+	start_complete_interrupt_flag = false;
 }
 
 
 /*
-	Throw away a byte the receiver is already holding.
-
-	RDRF is set during the address frame - the trace off the board shows
-	SSR = 0x40 immediately after the address byte goes into TDR - so a read
-	loop that starts by waiting for RDRF returns instantly with whatever was
-	in RDR, and every byte after it is one position out. What that looked
-	like on the panel: the touch-point count landing in the byte the caller
-	reads as the top half of X, so X jumped by 256 for each extra finger,
-	and the count itself was read from a coordinate byte and was never zero,
-	so every single pass reported a touch.
-
-	The reference driver never sees this because its receive interrupt reads
-	RDR, which clears RDRF as a side effect. Polling has to do it by hand.
-*/
-static	void	drain_rx(void)
-{
-	if (SCI6.SSR.BIT.RDRF != 0)
-		(void)SCI6.RDR;
-}
-
-
-/*
-	Start and stop conditions are generated by writing SIMR3 and complete
-	asynchronously; IICSTIF reports that, and has to be cleared by hand
-	before the bus lines are driven to their next state.
+	Start and stop conditions are generated by writing SIMR3; the group
+	BL0 handler clears IICSTIF when the condition has been issued and
+	raises the flag. Then the lines are handed to the transmitter (start)
+	or released (stop).
 */
 static	W	start_stop(W stop)
 {
-	UW	n;
-
 	SCI6.SIMR3.BYTE = (stop)? 0x53 : 0x51;
 
-	for (n = I2C_TIMEOUT; ; n--) {
-		if (n == 0) {
-			envision_i2c_trace[4] = (stop)? 2 : 1;
-			return 0;
-		}
-		if (SCI6.SIMR3.BIT.IICSTIF != 0)
-			break;
-	}
-
-	SCI6.SIMR3.BIT.IICSTIF = 0;
-	for (n = I2C_TIMEOUT; ; n--) {
-		if (n == 0) {
-			envision_i2c_trace[4] = (stop)? 4 : 3;
-			return 0;
-		}
-		if (SCI6.SIMR3.BIT.IICSTIF == 0)
-			break;
-	}
+	if (wait_flag(&start_complete_interrupt_flag, (stop)? 2 : 1) == 0)
+		return 0;
 
 	if (!stop)
 		envision_i2c_trace[3] = SCI6.SIMR3.BYTE;
 
 	if ((stop)) {
-		/* release both lines */
 		SCI6.SIMR3.BIT.IICSCLS = 3;
 		SCI6.SIMR3.BIT.IICSDAS = 3;
 	} else {
-		/* hand the lines to the transmitter */
 		SCI6.SIMR3.BIT.IICSCLS = 0;
 		SCI6.SIMR3.BIT.IICSDAS = 0;
 	}
@@ -459,18 +404,10 @@ static	W	start_stop(W stop)
 static	W	write_address(W address, W isread)
 {
 	SCI6.TDR = (UB)((address << 1) | (isread? 1 : 0));
-
-	/*
-		Sampled before the wait, so that a trace can show whether writing
-		TDR actually cleared TEND. If it did not, the wait below returns
-		on the previous frame's completion and everything after it is a
-		frame out of step - the kind of thing that is invisible from the
-		outside and obvious here.
-	*/
 	envision_i2c_trace[0] = SCI6.SSR.BYTE;
 
-	if (wait_tx() == 0) {
-		envision_i2c_trace[4] = 5;
+	/* TXI in simple IIC mode is raised after the acknowledge bit */
+	if (wait_flag(&tx_complete_interrupt_flag, 5) == 0) {
 		envision_i2c_trace[1] = SCI6.SSR.BYTE;
 		return 0;
 	}
@@ -486,8 +423,8 @@ static	W	i2c_write(W address, const UB *data, W length)
 {
 	W	ret, i;
 
+	clear_flags();
 	SCI6.SCR.BIT.RIE = 0;
-	drain_rx();
 
 	if (start_stop(0) == 0)
 		return 0;
@@ -496,8 +433,7 @@ static	W	i2c_write(W address, const UB *data, W length)
 	if ((ret))
 		for (i = 0; i < length; i++) {
 			SCI6.TDR = data[i];
-			if (wait_tx() == 0) {
-				envision_i2c_trace[4] = 6;
+			if (wait_flag(&tx_complete_interrupt_flag, 6) == 0) {
 				ret = 0;
 				break;
 			}
@@ -514,8 +450,8 @@ static	W	i2c_read(W address, UB *data, W length)
 {
 	W	ret, i;
 
+	clear_flags();
 	SCI6.SCR.BIT.RIE = 0;
-	drain_rx();
 
 	if (start_stop(0) == 0)
 		return 0;
@@ -525,10 +461,6 @@ static	W	i2c_read(W address, UB *data, W length)
 		SCI6.SIMR2.BIT.IICACKT = 0;		/* ACK each byte ... */
 		SCI6.SCR.BIT.RIE = 1;
 
-		/* the address frame leaves RDRF set; the loop below must not
-		   mistake that for the first data byte */
-		drain_rx();
-
 		for (i = 0; i < length; i++) {
 			if (i == length - 1)
 				SCI6.SIMR2.BIT.IICACKT = 1;	/* ... but NACK the last */
@@ -536,15 +468,13 @@ static	W	i2c_read(W address, UB *data, W length)
 			/* reception is driven by a dummy transmission */
 			SCI6.TDR = 0xff;
 
-			if (wait_rx() == 0) {
-				envision_i2c_trace[4] = 7;
+			if (wait_flag(&rx_complete_interrupt_flag, 7) == 0) {
 				ret = 0;
 				break;
 			}
-			data[i] = SCI6.RDR;
+			data[i] = received_byte;
 
-			if (wait_tx() == 0) {
-				envision_i2c_trace[4] = 8;
+			if (wait_flag(&tx_complete_interrupt_flag, 8) == 0) {
 				ret = 0;
 				break;
 			}
@@ -629,13 +559,22 @@ void	envision_touch_init(void)
 	SCI6.SIMR2.BIT.IICINTM = 1;		/* TXI/RXI mean TDRE/RDRF */
 	SCI6.SPMR.BYTE = 0;
 
-	/*
-		Left exactly as the reference driver has it, interrupt enables
-		included. Nothing enables these in the ICU, so the requests pile
-		up in IR unserviced and the flags are read by polling instead -
-		see the note at the top of this file.
-	*/
+	/* TIE, TE, RE, TEIE - as the reference driver has it */
 	SCI6.SCR.BYTE = 0xb4;
+
+	/* group BL0 interrupt 12: TEI6, used for start/stop completion */
+	ICU.GENBL0.BIT.EN12 = 1;
+	IR(ICU, GROUPBL0) = 0;
+	IPR(ICU, GROUPBL0) = 2;
+	IEN(ICU, GROUPBL0) = 1;
+
+	IR(SCI6, RXI6) = 0;
+	IPR(SCI6, RXI6) = 5;
+	IEN(SCI6, RXI6) = 1;
+
+	IR(SCI6, TXI6) = 0;
+	IPR(SCI6, TXI6) = 5;
+	IEN(SCI6, TXI6) = 1;
 }
 
 

@@ -70,7 +70,7 @@ int	main(void)
 
 	init_lcdtp();
 	gfil_rec(0, 0, LCD_W, LCD_H, 0x0000);
-	gdra_stp(8, 20, 0x07e0, 0x0000, NULL, (UB*)"rx65n touch i2c diag");
+	gdra_stp(8, 20, 0x07e0, 0x0000, NULL, (UB*)"rx65n touch diag 2 (isr)");
 	lcdtp_sendlogs("diag1 up\n");
 
 	for (;;) {
