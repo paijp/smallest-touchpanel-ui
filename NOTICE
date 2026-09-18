@@ -1,0 +1,33 @@
+smallest-touchpanel-ui
+Copyright (c) 2022-2026 paijp
+
+This product is licensed under the Apache License, Version 2.0 (see
+LICENSE), with the exception noted below.
+
+------------------------------------------------------------------------
+rx65n/envision_hw.c
+rx65n/envision_hw.h
+------------------------------------------------------------------------
+
+These two files are derived from EnvisionDemo1 in
+
+    https://github.com/miniwinwm/RenesasEnvisionGCC
+
+    MIT License
+    Copyright (c) 2019 John Blaiklock
+
+and are distributed under that MIT licence, whose full text is reproduced
+at the top of each of them. They hold the board-specific register
+sequences for the RX65N Envision Kit - the system clock, the GLCDC, and
+the touch controller's I2C - which are values only meaningful for that
+board and not worth re-deriving.
+
+Nothing else in this repository is derived from that project. In
+particular rx65n/lcdtp.c and rx65n/lcdtp.h contain no code from it: they
+reach the hardware only through the handful of functions declared in
+rx65n/envision_hw.h.
+
+Building the RX65N port also requires the startup files (vectors, reset
+code, linker script, and Renesas' generated iodefine.h) from the same
+upstream project. Those are fetched at build time and are deliberately
+not redistributed here - see rx65n/README.md.

@@ -26,6 +26,18 @@ bash fetch-lcdtp.sh
 make DEMO=lcdtp
 ```
 
+`fetch-lcdtp.sh` pulls two things: this port, and the `generate/` directory
+from [miniwinwm/RenesasEnvisionGCC](https://github.com/miniwinwm/RenesasEnvisionGCC)
+- the interrupt vectors, reset code, linker script and Renesas' generated
+`iodefine.h`. **The port does not build without them**, and not only for the
+register names: the touch driver's I2C waits on flags raised by the three
+interrupt handlers in that directory's `inthandler.c`.
+
+They are fetched rather than vendored on purpose. `iodefine.h` in particular
+is a Renesas-generated file that reaches us via a third party's MIT
+licence, and fetching it at build time keeps a question this repository
+cannot answer out of this repository.
+
 ## What the port had to do, and what it did not
 
 Almost nothing, for the drawing half. The GLCDC scans a plain linear RGB565
@@ -289,3 +301,25 @@ written, so the display and touch paths have been checked by reading and by
 building, not by looking at a screen. The `e2-server-gdb` side reaches
 `can not connect to the emulator`, which is the correct response with no
 board attached.
+
+## Licence
+
+Apache 2.0, like the rest of the library, with one exception:
+`envision_hw.c` and `envision_hw.h` are **MIT**, derived from EnvisionDemo1
+in [miniwinwm/RenesasEnvisionGCC](https://github.com/miniwinwm/RenesasEnvisionGCC)
+(Copyright (c) 2019 John Blaiklock), and reproduce that licence in full at
+the top of each file. MIT permits this as long as the notice travels with
+the code; it does not make the rest of the repository MIT.
+
+The split is not cosmetic. Everything taken from that project - the system
+clock setup, the ~130 GLCDC register writes, the touch controller's I2C -
+is in those two files. `lcdtp.c` and `lcdtp.h` contain none of it: they
+touch no register directly and reach the hardware only through the six
+functions `envision_hw.h` declares. So the port proper is plain Apache 2.0
+paijp code, and only the board bring-up carries the MIT notice.
+
+Worth saying that the upstream is well worth reading, and not only because
+its licence is generous: panel timings and pin assignments are values that
+can only be confirmed on real hardware. It is also not bug-free - see
+`patch-demo.py` in the build harness for the three defects found by running
+it.
