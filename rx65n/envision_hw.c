@@ -395,30 +395,39 @@ static	W	touch_read(UB *buf)
 	W	i;
 
 	envision_i2c_trace[4] = 0;
+	envision_i2c_trace[15] = 1;
 
 	i2cstart();
+	envision_i2c_trace[15] = 2;
 	if ((envision_i2c_trace[0] = i2csend(TOUCH_I2C_ADDRESS << 1))) {
 		envision_i2c_trace[4] = 1;	/* address, write */
 		i2cstop();
 		return 0;
 	}
+	envision_i2c_trace[15] = 3;
 	if (i2csend(2)) {
 		envision_i2c_trace[4] = 2;	/* register number */
 		i2cstop();
 		return 0;
 	}
 
+	envision_i2c_trace[15] = 4;
 	i2cstart();				/* repeated start */
+	envision_i2c_trace[15] = 5;
 	if ((envision_i2c_trace[1] = i2csend((TOUCH_I2C_ADDRESS << 1) | 1))) {
 		envision_i2c_trace[4] = 3;	/* address, read */
 		i2cstop();
 		return 0;
 	}
 
-	for (i = 0; i < 7; i++)
+	for (i = 0; i < 7; i++) {
+		envision_i2c_trace[15] = 6 + i;
 		buf[i] = (UB)i2crecv((i == 6)? 1 : 0);
+	}
 
+	envision_i2c_trace[15] = 13;
 	i2cstop();
+	envision_i2c_trace[15] = 14;
 
 	envision_i2c_trace[2] = (UW)i2c_stretch_timeouts;
 	envision_i2c_trace[7]++;

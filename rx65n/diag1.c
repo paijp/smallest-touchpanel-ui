@@ -30,7 +30,7 @@ static	const	char	*label[ENVISION_I2C_TRACE_N] = {
 	"nak wr  ", "nak rd  ", "stretch ", "pinorder",
 	"gaveup  ", "points  ", "int p02 ", "ok count",
 	"raw[0]  ", "raw[1]  ", "raw[2]  ", "raw[3]  ",
-	"raw[4]  ", "raw[5]  ", "raw[6]  ", "        "
+	"raw[4]  ", "raw[5]  ", "raw[6]  ", "step    "
 };
 
 
