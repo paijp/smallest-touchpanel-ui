@@ -133,10 +133,16 @@ int	main(void)
 				controller reports twelve bits per axis, so a
 				misread gives coordinates in the thousands,
 				and those go straight into a framebuffer
-				address. Drawing at one of those is not a
-				wrong pixel, it is a write into whatever else
-				lives there: the program ran on for a few
-				touches and then stopped.
+				address: not a wrong pixel but a write into
+				whatever else lives there.
+
+				Kept as a guard on its own merits. It was
+				added believing it explained a program that
+				stopped after a few touches, on the strength
+				of RAM that read back as a repeating pattern;
+				those reads turned out to have been taken of
+				a running target and to mean nothing. The
+				stopping is real and still unexplained.
 			*/
 			if (x >= 4 && y >= 4 && x < LCD_W - 4 && y < LCD_H - 4)
 				gfil_rec(x - 4, y - 4, x + 4, y + 4, 0xf800);
