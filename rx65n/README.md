@@ -203,10 +203,25 @@ and then stops listening on its port; start a new server for each
 where possible, or the semaphore removed before the next start - the
 `rm -f` above is not optional after a `kill`.
 
-It also attaches to the target as it finds it: a target `rfp-cli -run`
-left running is still running, `info threads` says so, and the ring buffer
-header is intact when the first read arrives. `readlog.py` therefore does
-not `continue`; against a running thread that is an error.
+It does **not** attach to the target as it finds it. An earlier version of
+this file said it did - that a target left running by `rfp-cli -run` was
+still running once the server had connected. That was wrong, and wrong in
+the way that costs the most: RAM keeps its contents when the CPU stops, so
+a frozen ring buffer reads exactly like a live one, and the numbers coming
+back looked perfectly reasonable for days.
+
+Connecting resets the target and leaves it there. The backlight goes out,
+`.data` is copied from ROM again so the write pointer returns to zero, and
+stopping the server does not release it. Only `rfp-cli -run`, with no
+program operation - it prints "No operation" and returns - starts it again.
+
+The reset also wipes the buffer before anything can be read out of it. So
+this path currently yields nothing: not a live stream, and not a snapshot
+either. Putting the buffer somewhere the startup code does not initialise
+would at least make the snapshot work; that is not done yet.
+
+`readlog.py` does not `continue` after connecting. That was written for the
+attach-as-found model above, and needs revisiting with the rest of this.
 
 ### -uWorkRamAddress
 
