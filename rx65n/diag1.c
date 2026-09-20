@@ -30,7 +30,8 @@ static	const	char	*label[ENVISION_I2C_TRACE_N] = {
 	"nak wr  ", "nak rd  ", "stretch ", "pinorder",
 	"gaveup  ", "points  ", "int p02 ", "ok count",
 	"raw[0]  ", "raw[1]  ", "raw[2]  ", "raw[3]  ",
-	"raw[4]  ", "raw[5]  ", "raw[6]  ", "step    "
+	"raw[4]  ", "raw[5]  ", "raw[6]  ", "step    ",
+	"loopstep", "        ", "        ", "        "
 };
 
 
@@ -76,6 +77,7 @@ int	main(void)
 	lcdtp_sendlogs("diag1 up\n");
 
 	for (;;) {
+		envision_i2c_trace[16] = 1;
 		x = y = -1;
 		/*
 			Through the gate this time, as the real driver reads: no
@@ -84,6 +86,7 @@ int	main(void)
 			pass, so the log records when - whether - the gate opens.
 		*/
 		touched = envision_touch_get(&x, &y);
+		envision_i2c_trace[16] = 2;
 
 		/*
 			Log only what changed. At eight lines a pass the ring
@@ -96,12 +99,24 @@ int	main(void)
 			if (i != 7 && envision_i2c_trace[i] != prev[i])
 				changed = 1;	/* [7] is a counter; it always changes */
 
+		envision_i2c_trace[16] = 3;
 		for (i = 0; i < ENVISION_I2C_TRACE_N; i++) {
-			gfil_rec(8, 28 + i * 14, 240, 42 + i * 14, 0x0000);
-			gdra_stp(8, 40 + i * 14, 0xffff, 0x0000, NULL,
-				 (UB*)label[i]);
-			hex8(envision_i2c_trace[i], line);
-			gdra_stp(88, 40 + i * 14, 0xffe0, 0x0000, NULL, line);
+			/*
+				The log takes every slot; the screen takes the
+				ones that fit on it. gfil_rec and gdra_stp are
+				given the framebuffer's coordinates directly,
+				so a row past the bottom is a write past the
+				end of it.
+			*/
+			if (42 + i * 14 <= LCD_H) {
+				gfil_rec(8, 28 + i * 14, 240, 42 + i * 14,
+					 0x0000);
+				gdra_stp(8, 40 + i * 14, 0xffff, 0x0000, NULL,
+					 (UB*)label[i]);
+				hex8(envision_i2c_trace[i], line);
+				gdra_stp(88, 40 + i * 14, 0xffe0, 0x0000,
+					 NULL, line);
+			}
 
 			if ((changed)) {
 				lcdtp_sendlogs(label[i]);
@@ -117,6 +132,7 @@ int	main(void)
 			else - printed next to a failed read it would look as
 			though the read had worked.
 		*/
+		envision_i2c_trace[16] = 4;
 		if ((touched)) {
 			touches++;
 			lastx = x;
@@ -153,6 +169,7 @@ int	main(void)
 			finger is down cannot be read by the person whose finger
 			it is.
 		*/
+		envision_i2c_trace[16] = 5;
 		gfil_rec(260, 100, 460, 160, 0x0000);
 		gdra_stp(260, 112, 0x07ff, 0x0000, NULL, (UB*)"touches");
 		dec5(touches, line);
@@ -164,7 +181,9 @@ int	main(void)
 		dec5(lasty, line);
 		gdra_stp(350, 140, 0x07ff, 0x0000, NULL, line);
 
+		envision_i2c_trace[16] = 6;
 		dly_tsk(60);
+		envision_i2c_trace[16] = 7;
 	}
 
 	return 0;

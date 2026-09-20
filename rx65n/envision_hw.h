@@ -63,8 +63,13 @@ W	envision_touch_get_raw(W *x, W *y);
 	  [6] the touch interrupt line, P02
 	  [7] transactions that completed without a timeout
 	  [8..14] the seven bytes of the last successful read, as received
+	  [15] how far into a transaction touch_read() got, 1..14
+	  [16] how far round the caller's loop it got - the transaction is not
+	       the only thing that can stop, and [15] reaching 14 says the
+	       transaction finished and the stopping is somewhere after it
+	  [17..19] spare
 */
-#define	ENVISION_I2C_TRACE_N	16
+#define	ENVISION_I2C_TRACE_N	20
 extern	volatile UW	envision_i2c_trace[ENVISION_I2C_TRACE_N];
 
 #endif

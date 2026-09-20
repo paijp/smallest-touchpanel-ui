@@ -447,6 +447,7 @@ W	envision_touch_get_raw(W *x, W *y)
 	if (touch_read(buf) == 0)
 		return 0;
 
+	envision_i2c_trace[16] = 20;
 	envision_i2c_trace[5] = buf[0];
 
 	if (buf[0] == 0)
