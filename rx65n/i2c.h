@@ -42,30 +42,45 @@
 #include	"basic.h"
 
 /*
-	P00 is SSCL6 and P01 is SSDA6: in simple IIC the clock is on the SCIn
-	receive pin and the data on its transmit pin, and SCI6's are P00 and
-	P01 here. The upstream demo sets both up identically so it does not
-	settle the question; if a device that is certainly present never
-	acknowledges, swapping these two blocks is the first thing to try.
+	The clock and the data are on P00 and P01, but which is which is not
+	settled by anything to hand. In simple IIC the clock rides on the SCIn
+	receive pin and the data on its transmit pin, and SCI6's are these two;
+	the upstream demo sets both to the same alternate function, so it does
+	not say either. An earlier version of this file picked SCL=P00 and
+	stated it as fact, and the panel answered nothing: every address frame
+	went unacknowledged while the interrupt line showed touches arriving.
 
-	ODR0 holds two bits per pin, so P00's open-drain control is B0 and
-	P01's is B2.
+	So it is chosen at run time instead. i2cprobe() tries one way round,
+	and if nothing answers, the other. Which one won is in the trace, so
+	the board says which it is rather than being told.
 */
-#define	SCL_PODR	PORT0.PODR.BIT.B0
-#define	SCL_PIDR	PORT0.PIDR.BIT.B0
-#define	SCL_PDR		PORT0.PDR.BIT.B0
-#define	SCL_PMR		PORT0.PMR.BIT.B0
-#define	SCL_PCR		PORT0.PCR.BIT.B0
-#define	SCL_ODR		PORT0.ODR0.BIT.B0
-#define	SCL_DSCR	PORT0.DSCR.BIT.B0
+static	W	i2c_swap = 0;		/* 0: SCL=P00 SDA=P01, 1: the other way */
 
-#define	SDA_PODR	PORT0.PODR.BIT.B1
-#define	SDA_PIDR	PORT0.PIDR.BIT.B1
-#define	SDA_PDR		PORT0.PDR.BIT.B1
-#define	SDA_PMR		PORT0.PMR.BIT.B1
-#define	SDA_PCR		PORT0.PCR.BIT.B1
-#define	SDA_ODR		PORT0.ODR0.BIT.B2
-#define	SDA_DSCR	PORT0.DSCR.BIT.B1
+static	void	scl_set(W v)
+{
+	if ((i2c_swap))
+		PORT0.PODR.BIT.B1 = (UB)v;
+	else
+		PORT0.PODR.BIT.B0 = (UB)v;
+}
+
+static	W	scl_get(void)
+{
+	return (i2c_swap)? PORT0.PIDR.BIT.B1 : PORT0.PIDR.BIT.B0;
+}
+
+static	void	sda_set(W v)
+{
+	if ((i2c_swap))
+		PORT0.PODR.BIT.B0 = (UB)v;
+	else
+		PORT0.PODR.BIT.B1 = (UB)v;
+}
+
+static	W	sda_get(void)
+{
+	return (i2c_swap)? PORT0.PIDR.BIT.B0 : PORT0.PIDR.BIT.B1;
+}
 
 /*
 	Half a bit time. Nominal, not calibrated: at 120MHz ICLK this is on the
@@ -126,30 +141,34 @@ static	void	i2cscl_high(void)
 {
 	W	n;
 
-	SCL_PODR = 1;
+	scl_set(1);
 	for (n = I2C_STRETCH; n > 0; n--)
-		if ((SCL_PIDR))
+		if ((scl_get()))
 			return;
 	i2c_stretch_timeouts++;
 }
 
 
+/*
+	Both pins get the same treatment - GPIO, output, open drain, no internal
+	pull-up, released - so this does not need to know which is which. ODR0
+	holds two bits per pin, hence B0 for P00 and B2 for P01.
+*/
 static	void	i2cinit(void)
 {
-	/* both lines: GPIO, output, open drain, no internal pull-up, released */
-	SCL_PMR = 0;
-	SCL_PCR = 0;
-	SCL_ODR = 1;
-	SCL_DSCR = 1;
-	SCL_PODR = 1;
-	SCL_PDR = 1;
+	PORT0.PMR.BIT.B0 = 0;
+	PORT0.PCR.BIT.B0 = 0;
+	PORT0.ODR0.BIT.B0 = 1;
+	PORT0.DSCR.BIT.B0 = 1;
+	PORT0.PODR.BIT.B0 = 1;
+	PORT0.PDR.BIT.B0 = 1;
 
-	SDA_PMR = 0;
-	SDA_PCR = 0;
-	SDA_ODR = 1;
-	SDA_DSCR = 1;
-	SDA_PODR = 1;
-	SDA_PDR = 1;
+	PORT0.PMR.BIT.B1 = 0;
+	PORT0.PCR.BIT.B1 = 0;
+	PORT0.ODR0.BIT.B2 = 1;
+	PORT0.DSCR.BIT.B1 = 1;
+	PORT0.PODR.BIT.B1 = 1;
+	PORT0.PDR.BIT.B1 = 1;
 
 	i2cwait();
 }
@@ -158,28 +177,28 @@ static	void	i2cinit(void)
 static	void	i2cstart(void)
 {
 	/* works as a repeated start too: put both lines up first */
-	SDA_PODR = 1;
+	sda_set(1);
 	i2cwait();
 	i2cscl_high();
 	i2cwait();
 
-	SDA_PODR = 0;		/* data falls while the clock is high */
+	sda_set(0);		/* data falls while the clock is high */
 	i2cwait();
-	SCL_PODR = 0;
+	scl_set(0);
 	i2cwait();
 }
 
 
 static	void	i2cstop(void)
 {
-	SCL_PODR = 0;
+	scl_set(0);
 	i2cwait();
-	SDA_PODR = 0;
+	sda_set(0);
 	i2cwait();
 	i2cscl_high();
 	i2cwait();
 
-	SDA_PODR = 1;		/* data rises while the clock is high */
+	sda_set(1);		/* data rises while the clock is high */
 	i2cwait();
 }
 
@@ -190,20 +209,20 @@ static	W	i2csend(W data)
 	W	i, nak;
 
 	for (i = 0; i < 8; i++) {
-		SDA_PODR = (data & (0x80 >> i))? 1 : 0;
+		sda_set((data & (0x80 >> i))? 1 : 0);
 		i2cwait();
 		i2cscl_high();
 		i2cwait();
-		SCL_PODR = 0;
+		scl_set(0);
 		i2cwait();
 	}
 
-	SDA_PODR = 1;		/* let the device answer */
+	sda_set(1);		/* let the device answer */
 	i2cwait();
 	i2cscl_high();
 	i2cwait();
-	nak = (SDA_PIDR)? 1 : 0;
-	SCL_PODR = 0;
+	nak = (sda_get())? 1 : 0;
+	scl_set(0);
 	i2cwait();
 
 	return nak;
@@ -215,28 +234,61 @@ static	W	i2crecv(W nak)
 {
 	W	i, ret;
 
-	SDA_PODR = 1;
+	sda_set(1);
 	ret = 0;
 	for (i = 0; i < 8; i++) {
 		i2cwait();
 		i2cscl_high();
 		i2cwait();
 		ret <<= 1;
-		if ((SDA_PIDR))
+		if ((sda_get()))
 			ret |= 1;
-		SCL_PODR = 0;
+		scl_set(0);
 	}
 
 	i2cwait();
-	SDA_PODR = (nak)? 1 : 0;
+	sda_set((nak)? 1 : 0);
 	i2cwait();
 	i2cscl_high();
 	i2cwait();
-	SCL_PODR = 0;
+	scl_set(0);
 	i2cwait();
-	SDA_PODR = 1;
+	sda_set(1);
 
 	return ret;
+}
+
+
+/*
+	Ask the device at addr whether it is there, both ways round, and keep
+	whichever answered.
+
+	An address frame and nothing else: start, the address with the write
+	bit, look at the acknowledge, stop. A device that is present drives the
+	ninth clock low; with the clock and the data crossed over, nothing can,
+	because the address is being shifted out on the line the device is
+	listening to for a clock.
+
+	Returns 1 when something answered, and leaves i2c_swap set to the
+	mapping that worked. Returns 0 when neither way round answered, which
+	is a different fault - wrong address, held reset, no pull-ups - and not
+	one this can decide between.
+*/
+static	W	i2cprobe(W addr)
+{
+	W	tries;
+
+	for (tries = 0; tries < 2; tries++) {
+		i2cinit();
+		i2cstart();
+		if (!i2csend(addr << 1)) {
+			i2cstop();
+			return 1;
+		}
+		i2cstop();
+		i2c_swap = !i2c_swap;
+	}
+	return 0;
 }
 
 #endif

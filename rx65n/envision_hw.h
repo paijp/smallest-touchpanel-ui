@@ -55,7 +55,8 @@ W	envision_touch_get_raw(W *x, W *y);
 	  [0] the write address frame's acknowledge: 0 means answered
 	  [1] the read address frame's acknowledge
 	  [2] times a device has held the clock past the stretch limit
-	  [3] unused
+	  [3] which pin turned out to be the clock, settled at init by asking
+	      the panel: 0 nothing answered either way, 1 SCL on P00, 2 on P01
 	  [4] where it gave up: 0 none, 1 write address, 2 register number,
 	      3 read address
 	  [5] the controller's touch-point count, buf[0]

@@ -363,7 +363,23 @@ void	envision_touch_init(void)
 	MPC.PWPR.BIT.PFSWE = 0;
 	MPC.PWPR.BIT.B0WI = 1;
 
-	i2cinit();
+	/*
+		Settle which pin is the clock by asking the panel rather than by
+		asserting it. Picking wrong is silent from the outside: the
+		interrupt line still reports touches, every transaction still
+		runs to completion, and every address frame comes back
+		unacknowledged - because the address is being shifted out on the
+		line the device is watching for a clock.
+
+		[3] records the answer, so the board states its own wiring:
+		  0  nothing answered either way round
+		  1  SCL on P00, SDA on P01
+		  2  SCL on P01, SDA on P00
+	*/
+	if (!i2cprobe(TOUCH_I2C_ADDRESS))
+		envision_i2c_trace[3] = 0;
+	else
+		envision_i2c_trace[3] = (i2c_swap)? 2 : 1;
 }
 
 

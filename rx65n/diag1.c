@@ -27,7 +27,7 @@
 
 
 static	const	char	*label[ENVISION_I2C_TRACE_N] = {
-	"nak wr  ", "nak rd  ", "stretch ", "        ",
+	"nak wr  ", "nak rd  ", "stretch ", "pinorder",
 	"gaveup  ", "points  ", "int p02 ", "ok count",
 	"raw[0]  ", "raw[1]  ", "raw[2]  ", "raw[3]  ",
 	"raw[4]  ", "raw[5]  ", "raw[6]  ", "        "
@@ -127,8 +127,19 @@ int	main(void)
 			lcdtp_sendlogdec(y);
 			lcdtp_sendlogc('\n');
 
-			/* and where, so the mapping can be eyeballed */
-			gfil_rec(x - 4, y - 4, x + 4, y + 4, 0xf800);
+			/*
+				and where, so the mapping can be eyeballed -
+				but only when the point is on the panel. The
+				controller reports twelve bits per axis, so a
+				misread gives coordinates in the thousands,
+				and those go straight into a framebuffer
+				address. Drawing at one of those is not a
+				wrong pixel, it is a write into whatever else
+				lives there: the program ran on for a few
+				touches and then stopped.
+			*/
+			if (x >= 4 && y >= 4 && x < LCD_W - 4 && y < LCD_H - 4)
+				gfil_rec(x - 4, y - 4, x + 4, y + 4, 0xf800);
 		}
 
 		/*
