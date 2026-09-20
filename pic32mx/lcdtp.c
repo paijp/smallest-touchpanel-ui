@@ -1065,12 +1065,14 @@ UW	gettp()
 	z1 = gettpinner(0xc0);
 	if (z0 < (8 << 7)) {
 		if (z0 < (4 << 7))
-			pressed = 0;
+			if (pressed > 0)
+				pressed--;
 		return TPLIB_CMD_NULL;
 	}
 	if (z1 > (0xf8 << 7)) {
 		if (z1 > (0xfc << 7))
-			pressed = 0;
+			if (pressed > 0)
+				pressed--;
 		return TPLIB_CMD_NULL;
 	}
 	x = gettpinner(0xd0);
@@ -1079,12 +1081,14 @@ UW	gettp()
 	z1 = gettpinner(0xc0);
 	if (z0 < (8 << 7)) {
 		if (z0 < (4 << 7))
-			pressed = 0;
+			if (pressed > 0)
+				pressed--;
 		return TPLIB_CMD_NULL;
 	}
 	if (z1 > (0xf8 << 7)) {
 		if (z1 > (0xfc << 7))
-			pressed = 0;
+			if (pressed > 0)
+				pressed--;
 		return TPLIB_CMD_NULL;
 	}
 	
@@ -1108,7 +1112,7 @@ UW	gettp()
 	type = TPLIB_CMD_PRESS;
 	if ((pressed))
 		type = TPLIB_CMD_PRESSING;
-	pressed = 1;
+	pressed = 100;
 	
 	return type | (x << 12) | y;
 }
