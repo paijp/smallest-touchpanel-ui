@@ -54,10 +54,36 @@
 	another once it is on the board.
 */
 
+/*
+	-DDIAG9_CONSOLE=1 also streams to the debug console, which is the only
+	sink that can be read while the program runs. The ring buffer needs the
+	target stopped, so it cannot answer "is it still going" without ending
+	the run that question is about.
+
+	It is a separate axis from the step number on purpose. The one piece of
+	evidence against the console is a diag3 run that stopped after five
+	records at about 110 bytes a second, and it was never settled whether
+	that was the console's doing or the fault that stops everything else
+	here. Keeping it independent makes step 1 with and against the console
+	a single experiment that answers it.
+
+	The rate is kept well under that number. A full record goes out only
+	when the seven bytes change - which they do not, untouched - and
+	otherwise one short line a second says the loop is turning. Untouched
+	that is about six bytes a second; a finger makes it burst and stop
+	again.
+*/
+#ifndef	DIAG9_CONSOLE
+#define	DIAG9_CONSOLE	1
+#endif
+
 #include	"lcdtp.h"
 #include	"envision_hw.h"
 #include	"debuglog.h"
 #include	"i2c.h"
+#if	DIAG9_CONSOLE
+#include	"dbgcon.h"
+#endif
 
 
 #ifndef	DIAG9_STEP
@@ -128,12 +154,46 @@ static	W	read7(UB *buf)
 #endif
 
 
+#if	DIAG9_CONSOLE
+static	void	conhex2(UW v)
+{
+	dbgcon_putc((W)bin2hex[(v >> 4) & 0xf]);
+	dbgcon_putc((W)bin2hex[v & 0xf]);
+}
+
+
+/*
+	One line out of the console: the sequence number, the seven bytes, and
+	whether the transaction answered. Only called when there is something
+	to say, which is what keeps the rate down.
+*/
+static	void	conrecord(UW seq, const UB *buf, W ok)
+{
+	W	i;
+
+	conhex2(seq >> 8);
+	conhex2(seq);
+	dbgcon_putc(' ');
+	for (i = 0; i < 7; i++)
+		conhex2(buf[i]);
+	dbgcon_putc(' ');
+	dbgcon_putc((ok)? 'o' : 'x');
+	dbgcon_putc('\n');
+}
+#endif
+
+
 int	main(void)
 {
 	static	UB	line[32];
 	static	UB	buf[7];
 	static	UW	seq = 0;
 	W	i, ok;
+#if	DIAG9_CONSOLE
+	static	UB	prev[7];
+	static	UW	lastbeat = 0;
+	W	changed;
+#endif
 #if	DIAG9_STEP >= 3
 	W	x = 0, y = 0;
 #endif
@@ -150,6 +210,20 @@ int	main(void)
 	(void)i2cprobe(ADDR);
 #endif
 	lcdtp_sendlogs("diag9 up\n");
+
+#if	DIAG9_CONSOLE
+	dbgcon_enable = 1;
+	/*
+		Name the build on the way out. A capture that does not say which
+		step produced it is worth very little a day later, and this is
+		the one line that is certain to be in every capture.
+	*/
+	dbgcon_putc('s');
+	conhex2(DIAG9_STEP);
+	dbgcon_putc('\n');
+	for (i = 0; i < 7; i++)
+		prev[i] = 0;
+#endif
 
 	for (;;) {
 #if	DIAG9_STEP >= 3
@@ -171,7 +245,28 @@ int	main(void)
 		lcdtp_sendlogc((ok)? 'o' : 'x');
 		lcdtp_sendlogc('\n');
 #else
+#if	!DIAG9_CONSOLE
 		(void)ok;
+#endif
+#endif
+
+#if	DIAG9_CONSOLE
+		/*
+			Say something when the data changes, and otherwise once a
+			second so that silence means stopped rather than idle.
+			The distinction is the whole reason this sink exists.
+		*/
+		changed = 0;
+		for (i = 0; i < 7; i++)
+			if (buf[i] != prev[i])
+				changed = 1;
+
+		if ((changed) || seq - lastbeat >= (1000 / PASS_MS)) {
+			conrecord(seq, buf, ok);
+			lastbeat = seq;
+			for (i = 0; i < 7; i++)
+				prev[i] = buf[i];
+		}
 #endif
 
 		for (i = 0; i < 7; i++) {
