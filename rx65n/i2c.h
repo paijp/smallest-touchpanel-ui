@@ -274,8 +274,27 @@ static	W	i2crecv(W nak)
 	is a different fault - wrong address, held reset, no pull-ups - and not
 	one this can decide between.
 */
+/*
+	-DI2C_PROBE_STUB replaces the probe with its answer, for one experiment.
+
+	Every fault seen while chasing the freeze has had this function on the
+	stack, in two diagnostics that share nothing else. That is either
+	because the fault is in here, or because this is simply the first thing
+	that runs enough code to meet it. Taking the body away and keeping the
+	result separates the two: if the fault moves or stops, it was in here;
+	if it happens anyway somewhere else, this was only where it was being
+	noticed.
+
+	The hardcoded answer is what the probe has been returning on this board
+	- swap set, so SCL is P01 and SDA is P00.
+*/
 static	W	i2cprobe(W addr)
 {
+#ifdef	I2C_PROBE_STUB
+	(void)addr;
+	i2c_swap = 1;
+	return 1;
+#else
 	W	tries;
 
 	for (tries = 0; tries < 2; tries++) {
@@ -289,6 +308,7 @@ static	W	i2cprobe(W addr)
 		i2c_swap = !i2c_swap;
 	}
 	return 0;
+#endif
 }
 
 #endif
