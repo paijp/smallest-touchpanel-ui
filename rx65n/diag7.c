@@ -36,6 +36,7 @@
 
 #include	"lcdtp.h"
 #include	"envision_hw.h"
+#include	"dbgcon.h"
 
 
 static	void	hex4(UW v, UB *p)
@@ -62,6 +63,23 @@ int	main(void)
 	UB	*p;
 	UW	polls = 0, touches = 0;
 	W	x = 0, y = 0, lastx = 0, lasty = 0;
+
+	/*
+		A heartbeat that does not go through the screen or through gdb.
+
+		When this stopped last, the screen was frozen at poll=3 and no
+		fault handler had run, which leaves two very different states
+		indistinguishable: the processor stuck in a loop, or the
+		processor running fine with GLCDC no longer scanning. gdb cannot
+		be asked - it stops reading its FIFO once the target is
+		released - and the screen is the thing in question.
+
+		One character per second through the debug console settles it.
+		That rate is chosen from measurement, not caution: 110 bytes a
+		second through here stopped a board that four bytes a second ran
+		for fifteen minutes on.
+	*/
+	dbgcon_enable = 1;
 
 	init_lcdtp();
 	envision_touch_init();
@@ -97,6 +115,10 @@ int	main(void)
 
 		gfil_rec(8, 46, 460, 74, 0x0000);
 		gdra_stp(8, 60, 0xffe0, 0x0000, NULL, line);
+
+		/* about once a second at 60ms a pass, and a digit so a gap shows */
+		if ((polls % 16) == 0)
+			dbgcon_putc((W)('0' + (polls / 16) % 10));
 
 		dly_tsk(60);
 	}
