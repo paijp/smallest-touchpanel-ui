@@ -27,42 +27,44 @@
 	bit 12 meaning "a received character is waiting". charput() there spins on
 	bit 8 and then stores; this does the same with a bound on the spin.
 
-	None of which works here yet. Read this before using it.
+	This works on the Envision Kit, and what follows is what was measured
+	rather than what was expected - the two differed enough to be worth
+	writing down.
 
-	On the Envision Kit, driven by e2-server-gdb with the options in
-	container/gdbserver.sh, touching this block faults. Measured twice, both
-	ways round. With no debugger attached, a program that reads dbgstat
-	stops on that instruction: diag5 puts its title on the screen and never
-	reaches the line after the read. Under a debugger, with the target reset
-	and released, it ends in an exception storm - SIGTRAP at PC 0, with ISP
-	walked all the way down to 0, which is what the empty handlers in
-	inthandler.c do with a fault that repeats.
+	The target side costs nothing and is safe with no debugger present.
+	diag5 read dbgstat once and then wrote characters blind, with no status
+	check at all, for fifteen minutes: 2748 writes, no fault, still counting.
+	dbgstat read back as 0x00000000, so the transmit-busy bit is clear when
+	nobody is draining and the spin below falls straight through. Writes
+	with no listener simply go nowhere.
 
-	The bound below is therefore not the protection it was written as. It
-	bounds how long to *wait* for the mailbox, not whether to touch it, and
-	touching it is what faults. dbgcon_putc() is not called from
-	lcdtp_sendlogc() for that reason: a log sink that stops the program is
-	worse than no log sink, and this one would be called from inside the
-	code being debugged. Call it directly, from a program that is prepared
-	to crash.
+	(An earlier version of this comment said the opposite - that touching
+	the block faulted, both with and without a debugger. That was measured
+	on a build whose .bss began at address 0, so the diagnostic's own output
+	buffer was a null pointer and its screen went blank for reasons that had
+	nothing to do with these registers. See patch-demo.py. Neither
+	measurement said anything about this block.)
 
-	What has not been ruled out is the server's own configuration.
-	gdbserver.sh passes -uDebugMode= 0, and the name is at least suggestive;
-	there may simply be a mode in which these registers are live. Until
-	someone establishes that, this file is a record of the mechanism and not
-	a working channel.
-
-	The host side, for when it does work, is two monitor commands to e2-server-gdb, which then listens
-	on a TCP port and writes what arrives there:
+	The host side is two monitor commands to e2-server-gdb, which then
+	listens on a TCP port and writes what arrives there:
 
 		monitor set_simio_pipe,telnet
 		monitor start_interface,TELNET,telnet,5432
 
-	Both are present in the e2-server-gdb we have (checked in the binary's
-	command table, alongside get_interface_port). Once started, the stream is
-	served by the server's own SimIO thread, so reading it is a socket the
-	host opens - not something driven through the gdb session, and not
-	something that goes wrong when that session does.
+	The part that is not obvious: the emulator only drains the mailbox while
+	it has execution control. Attached to a target that was already running
+	from a flash, with both commands accepted and the port open, nothing
+	came out. After `monitor enable_execute_on_connect` - which resets the
+	target - and a continue, the same program's output appeared immediately
+	and kept coming.
+
+	So this costs a reset to switch on, which the ring buffer in debuglog.h
+	does not. What it buys is a stream that does not depend on the gdb
+	session staying healthy: the server serves it from its own SimIO thread,
+	and it was still delivering after `-exec-continue` had left the MI
+	channel unresponsive, which is the failure that has cost the most time
+	here. Between the two, debuglog.h is the history read out of a stopped
+	target and this is the running commentary.
 */
 
 #ifndef	RX65N_DBGCON_H

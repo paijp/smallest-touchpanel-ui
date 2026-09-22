@@ -72,20 +72,20 @@ volatile struct debuglog_struct	debuglog = {
 	yet. There is no lock and none is needed: one writer on the target, one
 	reader on the host, and the reader never writes.
 
-	The ring buffer only. dbgcon_putc() was called from here as well, on the
-	grounds that the two sinks fail in opposite directions and that the
-	console would give up harmlessly when no debugger was listening. The
-	second half of that was wrong, and wrong in the way that matters: the
-	bound was on how long to *wait* for the mailbox, not on touching it at
-	all, and touching it is what faults. Measured both ways - with no
-	debugger the program stops dead at the first status read, and under one
-	it ends in an exception storm with ISP walked down to zero and PC at
-	zero. A log sink that stops the program is worse than no log sink, and
-	this one is called from inside the code being debugged.
+	Both sinks, because they fail in opposite directions. The ring buffer
+	keeps history but can only be read with the target stopped, and it holds
+	minutes at best. The console streams live and unboundedly but keeps
+	nothing, needs a reset to switch on, and drops everything written before
+	the host opened the socket. Writing to both means the last few minutes
+	are recoverable after a freeze and the run up to it was watchable as it
+	happened.
 
-	So dbgcon.h is kept but not wired in: a program that wants the console
-	calls dbgcon_putc() itself, having established that the mailbox is live
-	on whatever configuration it runs under. See dbgcon.h for what is known.
+	The console was briefly taken out of here, on a measurement that said
+	touching its registers faulted. That measurement was made on a build
+	whose .bss started at address 0 and was about a null pointer, not about
+	these registers; re-measured, a program can write the mailbox blind for
+	fifteen minutes with no debugger attached and not miss a beat. See
+	dbgcon.h.
 */
 void	lcdtp_sendlogc(W c)
 {
@@ -94,4 +94,6 @@ void	lcdtp_sendlogc(W c)
 	w = debuglog.wr;
 	debuglog.buf[w & (DEBUGLOG_SIZE - 1)] = (UB)c;
 	debuglog.wr = w + 1;
+
+	dbgcon_putc(c);
 }
