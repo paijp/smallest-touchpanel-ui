@@ -311,11 +311,55 @@ one place, for all three.
 480x272 panel its lower parts fall off the bottom. Everything clips safely;
 it is a layout question, not a port question.
 
-**Not yet run on hardware.** The board was disconnected while this was
-written, so the display and touch paths have been checked by reading and by
-building, not by looking at a screen. The `e2-server-gdb` side reaches
-`can not connect to the emulator`, which is the correct response with no
-board attached.
+### On hardware
+
+The display works, the touch controller answers, and coordinates come back.
+The framebuffer was read back through the debugger with the target halted:
+it is at 0x00800000, it holds what was drawn, and the last address that
+answers is below 0x00840000 - so the 261,120 bytes it needs fit, with about
+a kilobyte to spare. Above that, reads return a repeating `03000000
+02000000` pattern, which is what unimplemented space gives back rather than
+an error. That pattern was previously taken for "reads of a running target
+are fabricated"; some of those reads were of addresses that do not exist.
+
+Four bugs found by running it, none of them the one below:
+
+- `.bss` was placed at address 0, so any object at its start had a null
+  address and every null check in the codebase rejected it. Fixed in
+  patch-demo.py; it is a defect in upstream's linker script.
+- ROM wait states were set before raising ICLK past 100MHz but not read
+  back, so the clock could go up before the write took effect.
+- the exception handlers were empty, so every fault arrived as PC 0 with
+  ISP 0 and nothing else. They now record which vector fired and stop.
+- 54 relocatable vectors were `(fp)0`, so an unclaimed interrupt jumped to
+  address 0 rather than to a handler.
+
+### The fault that is still open
+
+The program stops. Intermittently, usually within seconds, more readily
+while the I2C is running, and in upstream's own demo as well as this port.
+
+What it looks like with the handlers in place: a BRK or an undefined
+instruction, at a PC that is either in unimplemented space (0x0040Fxxx,
+0x007F8102) or one byte into a valid instruction. The interrupt stack and
+the stacked PSW are intact and ordinary. Without the display initialised
+the symptom changes shape: no exception at all, and
+`envision_touch_get_raw()` does not return.
+
+Ruled out, each by measurement rather than by argument: the drawing and its
+volume; the I2C transaction itself (a diagnostic calling i2c.h directly
+takes touches and keeps running); `lcdtp_polltask` (null, and its indirect
+call site was never reached - hardware breakpoint, hit count zero); stack
+overflow (124 bytes used of a kilobyte); peripheral interrupts (IER all
+zero); user mode (start.S sets it deliberately); the debug console; the
+debugger itself; and the clock configuration, which is identical to
+upstream's.
+
+Tools for the next attempt are in the rx65n repo: `logrun.sh` programs the
+board with the target held, brings up gdb and the console, and releases it
+with a listener already attached, so a capture starts at the program's
+first byte. `BREAK` takes several locations, which is what a bisect needs,
+because this gdb stops answering once the target is running.
 
 ## Licence
 
