@@ -9,17 +9,29 @@
 
 /*
 	Log sink for lcdtp_sendlogc() on RX65N: a ring buffer in RAM that the
-	debugger reads while the target keeps running.
+	debugger reads out of a stopped target.
 
 	The Envision Kit's E2 Lite has no virtual COM port (its USB descriptor is
 	one vendor-specific interface with two bulk endpoints and nothing else),
-	so there is no serial line to print to. What it does have is Renesas'
-	RRM/DMM - real-time RAM monitoring - which e2-server-gdb exposes with
-	-uAllowRRMDMM=1. With that, the host can read target RAM without halting
-	the CPU, so a plain ring buffer becomes a live console.
+	so there is no serial line to print to.
+
+	This was written believing RRM/DMM - real-time RAM monitoring, which
+	e2-server-gdb takes -uAllowRRMDMM=1 for - would make it a live console,
+	readable while the target ran. It does not, on this setup. Reads of a
+	running target come back as a short repeating pattern that is not what is
+	in memory, and they come back that way without an error, which cost a
+	long time: a frozen ring buffer and a live one look identical. The magic
+	word is the defence. If it does not read back as DEBUGLOG_MAGIC, throw
+	the whole read away rather than believing any part of it.
+
+	So this is history, not a live view: read it with the target stopped,
+	after something has gone wrong, and it says what led up to it. For
+	watching a run as it happens there is dbgcon.h, which streams through the
+	Debug Virtual Console instead. lcdtp_sendlogc() writes to both, because
+	they fail in opposite directions.
 
 	Nothing here is RX-specific except the memory it lives in; the same sink
-	works on any target whose debugger can read RAM while running.
+	works on any target whose debugger can read RAM.
 
 	Reading it: tools/readlog.py, which resolves the symbol from the .elf so
 	no address is hardcoded anywhere.

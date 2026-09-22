@@ -8,6 +8,41 @@
 */
 
 #include	"debuglog.h"
+#include	"dbgcon.h"
+
+
+/*
+	Starts alive, and stays that way only as long as the console answers. In
+	.data rather than .bss for the same reason the buffer is: a reader
+	attaching to a running target should not have to care when it started.
+*/
+W	dbgcon_dead = 0;
+
+
+/*
+	One character into the Debug Virtual Console, or nothing at all.
+
+	Two ways out without writing: the console has already been declared dead,
+	or it does not drain within DBGCON_SPIN. The second declares it dead, so
+	the cost of running without a debugger is one timeout for the whole run
+	rather than one per character.
+*/
+void	dbgcon_putc(W c)
+{
+	UW	spin;
+
+	if ((dbgcon_dead))
+		return;
+
+	for (spin = 0; (DBGCON_STAT & DBGCON_TXBUSY); spin++) {
+		if (spin >= DBGCON_SPIN) {
+			dbgcon_dead = 1;
+			return;
+		}
+	}
+
+	DBGCON_TX = (UW)(UB)c;
+}
 
 
 /*
@@ -36,6 +71,13 @@ volatile struct debuglog_struct	debuglog = {
 	byte next time, rather than reading a slot the writer has not filled in
 	yet. There is no lock and none is needed: one writer on the target, one
 	reader on the host, and the reader never writes.
+
+	Both sinks, because they fail in opposite directions. The ring buffer
+	keeps history but can only be read with the target stopped, and it holds
+	minutes at best. The console streams live and unboundedly but keeps
+	nothing, and anything written before the host opened the socket is gone.
+	Writing to both means the last few minutes are recoverable after a freeze
+	and the run up to it was watchable as it happened.
 */
 void	lcdtp_sendlogc(W c)
 {
@@ -44,4 +86,6 @@ void	lcdtp_sendlogc(W c)
 	w = debuglog.wr;
 	debuglog.buf[w & (DEBUGLOG_SIZE - 1)] = (UB)c;
 	debuglog.wr = w + 1;
+
+	dbgcon_putc(c);
 }
