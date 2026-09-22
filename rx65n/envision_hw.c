@@ -111,8 +111,43 @@ void	envision_clock_init(void)
 	SYSTEM.MOSCWTCR.BYTE = 0x53;
 	SYSTEM.MOSCCR.BIT.MOSTP = 0;
 
-	/* ROM wait states have to go up before the clock does */
+	/*
+		Wait for the oscillator to say it is running. MOSCWTCR gates the
+		clock output until its counter expires, so the PLL below would
+		not be locking onto nothing either way - but the documented
+		order asks for this before the main clock is used as a source,
+		and the cost of following it is one polled bit.
+	*/
+	while (SYSTEM.OSCOVFSR.BIT.MOOVF == 0)
+		__asm__ __volatile__ ("nop");
+
+	/*
+		ROM wait states have to go up before the clock does - and the
+		write has to have taken effect before the clock does, which is
+		not the same thing and is the part that was missing.
+
+		Above 100MHz the code flash needs two wait states. This write is
+		not applied the instant it retires, so raising ICLK to 120MHz
+		straight afterwards can happen while the flash is still being
+		read with too few waits. What comes back then is not an error,
+		it is wrong data - and wrong data fetched as code is a garbage
+		instruction: an undefined instruction, or a 0x00, which is BRK,
+		or a branch to nowhere.
+
+		That is the shape of the fault this port has been chasing.
+		Intermittent, never the same address twice, wild PCs in
+		unimplemented space, worse the more the program does, and
+		present in the diagnostic that was thought to be clean as well
+		as the one that was not. Reading the register back until it
+		reads 2 is what the Renesas BSP does and what was missing here.
+
+		Whether it is *the* cause is not established - it is a
+		documented requirement that was not met and a plausible fit for
+		the symptom. The board decides that, not this comment.
+	*/
 	SYSTEM.ROMWT.BIT.ROMWT = 2;
+	while (SYSTEM.ROMWT.BIT.ROMWT != 2)
+		__asm__ __volatile__ ("nop");
 
 	SYSTEM.PLLCR.BIT.PLIDIV = 0;		/* /1 */
 	SYSTEM.PLLCR.BIT.STC = 39;		/* x20 */
