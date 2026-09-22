@@ -287,12 +287,20 @@ static	W	i2crecv(W nak)
 
 	The hardcoded answer is what the probe has been returning on this board
 	- swap set, so SCL is P01 and SDA is P00.
+
+	i2cinit() stays. Leaving it out as well was a mistake the first time
+	round: it is what puts the two pins into open-drain GPIO, so without it
+	the bus does not work at all, no touch is ever read, and "the fault
+	stopped happening" says nothing except that the program stopped doing
+	I2C. With it in, the pins are set up and touch_read() drives the bus
+	for real; what is missing is only the probe's own transaction.
 */
 static	W	i2cprobe(W addr)
 {
 #ifdef	I2C_PROBE_STUB
 	(void)addr;
 	i2c_swap = 1;
+	i2cinit();
 	return 1;
 #else
 	W	tries;
