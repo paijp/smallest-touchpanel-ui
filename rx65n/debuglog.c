@@ -12,11 +12,15 @@
 
 
 /*
-	Starts alive, and stays that way only as long as the console answers. In
-	.data rather than .bss for the same reason the buffer is: a reader
-	attaching to a running target should not have to care when it started.
+	Starts alive, and stays that way only as long as the console answers.
+	Zero-initialised, so this is in .bss and the startup code clears it -
+	unlike the buffer below, which needs its header set up before main and
+	so has to be in .data.
 */
 W	dbgcon_dead = 0;
+
+/* Opt-in; see dbgcon.h for why it is not on by default. */
+W	dbgcon_enable = 0;
 
 
 /*
@@ -31,7 +35,7 @@ void	dbgcon_putc(W c)
 {
 	UW	spin;
 
-	if ((dbgcon_dead))
+	if (!dbgcon_enable || (dbgcon_dead))
 		return;
 
 	for (spin = 0; (DBGCON_STAT & DBGCON_TXBUSY); spin++) {

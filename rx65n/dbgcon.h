@@ -87,6 +87,20 @@
 */
 #define	DBGCON_SPIN	20000
 
+/*
+	Off unless a program asks for it, because switching it on is not free:
+	it only delivers while the emulator holds execution control, which means
+	a reset, which means it cannot be added to a board that is already
+	running. A program that wants it sets this in main().
+
+	It is also not free at the far end. What made this an opt-in rather than
+	a default was diag3: at about 110 bytes a second through here it stopped
+	after five records, screen and all, where diag5 at four bytes a second
+	ran for fifteen minutes. Whether that is the console's doing or the
+	program's own is exactly what having a switch lets anyone find out.
+*/
+extern	W	dbgcon_enable;
+
 /* Set once the console has failed to drain; nothing tries again after that. */
 extern	W	dbgcon_dead;
 
