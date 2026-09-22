@@ -27,17 +27,32 @@
 	bit 12 meaning "a received character is waiting". charput() there spins on
 	bit 8 and then stores; this does the same with a bound on the spin.
 
-	The bound is the whole difference, and it is not optional. Bit 8 is
-	cleared by the emulator, so with no emulator attached - or with one
-	attached but not told to service the console - it never clears and
-	upstream's charput() spins forever. On a board whose only output is the
-	screen that is indistinguishable from the freeze we are chasing, which is
-	precisely the wrong thing to introduce into the program doing the
-	chasing. So: give up after a while, and having given up once, stop
-	trying. A program built with this in it runs the same with or without a
-	debugger.
+	None of which works here yet. Read this before using it.
 
-	The host side is two monitor commands to e2-server-gdb, which then listens
+	On the Envision Kit, driven by e2-server-gdb with the options in
+	container/gdbserver.sh, touching this block faults. Measured twice, both
+	ways round. With no debugger attached, a program that reads dbgstat
+	stops on that instruction: diag5 puts its title on the screen and never
+	reaches the line after the read. Under a debugger, with the target reset
+	and released, it ends in an exception storm - SIGTRAP at PC 0, with ISP
+	walked all the way down to 0, which is what the empty handlers in
+	inthandler.c do with a fault that repeats.
+
+	The bound below is therefore not the protection it was written as. It
+	bounds how long to *wait* for the mailbox, not whether to touch it, and
+	touching it is what faults. dbgcon_putc() is not called from
+	lcdtp_sendlogc() for that reason: a log sink that stops the program is
+	worse than no log sink, and this one would be called from inside the
+	code being debugged. Call it directly, from a program that is prepared
+	to crash.
+
+	What has not been ruled out is the server's own configuration.
+	gdbserver.sh passes -uDebugMode= 0, and the name is at least suggestive;
+	there may simply be a mode in which these registers are live. Until
+	someone establishes that, this file is a record of the mechanism and not
+	a working channel.
+
+	The host side, for when it does work, is two monitor commands to e2-server-gdb, which then listens
 	on a TCP port and writes what arrives there:
 
 		monitor set_simio_pipe,telnet
