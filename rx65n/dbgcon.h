@@ -101,8 +101,12 @@
 */
 extern	W	dbgcon_enable;
 
-/* Set once the console has failed to drain; nothing tries again after that. */
-extern	W	dbgcon_dead;
+/*
+	Characters dropped because the console did not drain within DBGCON_SPIN.
+	Nonzero means the log has holes in it, and how many - which is the
+	difference between a program that stopped and a log that stopped.
+*/
+extern	W	dbgcon_dropped;
 
 void	dbgcon_putc(W c);
 

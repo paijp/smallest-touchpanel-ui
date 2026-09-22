@@ -12,35 +12,43 @@
 
 
 /*
-	Starts alive, and stays that way only as long as the console answers.
-	Zero-initialised, so this is in .bss and the startup code clears it -
-	unlike the buffer below, which needs its header set up before main and
-	so has to be in .data.
+	How many characters were dropped because the console did not drain in
+	time. Readable with the debugger, and the difference between "the
+	program stopped" and "the log stopped", which are not the same thing and
+	were confused for each other here more than once.
 */
-W	dbgcon_dead = 0;
+W	dbgcon_dropped = 0;
 
 /* Opt-in; see dbgcon.h for why it is not on by default. */
 W	dbgcon_enable = 0;
 
 
 /*
-	One character into the Debug Virtual Console, or nothing at all.
+	One character into the Debug Virtual Console, or none.
 
-	Two ways out without writing: the console has already been declared dead,
-	or it does not drain within DBGCON_SPIN. The second declares it dead, so
-	the cost of running without a debugger is one timeout for the whole run
-	rather than one per character.
+	A character that cannot be sent is dropped and counted; the next one
+	tries again. The first version latched instead - one timeout and the
+	console was off for the rest of the run - which was meant to keep the
+	cost of running without a debugger to a single timeout. It also meant
+	that a consumer which was merely slow for a moment silenced the log
+	permanently, and it did: diag8 printed its banner and nothing else,
+	which read as a program that had stopped and was a log that had given
+	up. That cost a run and nearly cost a wrong conclusion.
+
+	Dropping is the right failure here. The log is a diagnostic; a gap in it
+	is information, and the counter says how big the gap was. Latching threw
+	away everything after the first hiccup and said nothing about it.
 */
 void	dbgcon_putc(W c)
 {
 	UW	spin;
 
-	if (!dbgcon_enable || (dbgcon_dead))
+	if (!dbgcon_enable)
 		return;
 
 	for (spin = 0; (DBGCON_STAT & DBGCON_TXBUSY); spin++) {
 		if (spin >= DBGCON_SPIN) {
-			dbgcon_dead = 1;
+			dbgcon_dropped++;
 			return;
 		}
 	}
