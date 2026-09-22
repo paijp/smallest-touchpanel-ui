@@ -1,5 +1,5 @@
 /*
-	Smallest touchpanel UI https://github.com/paijp/smallest-touchpanel
+	Smallest touchpanel UI https://github.com/paijp/smallest-touchpanel-ui
 
 	Copyright (c) 2026 paijp
 
