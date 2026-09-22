@@ -358,6 +358,25 @@ volatile UW	envision_i2c_trace[ENVISION_I2C_TRACE_N] = {0};
 
 void	envision_touch_init(void)
 {
+#ifdef	ENVISION_TOUCH_INIT_STUB
+	/*
+		Everything but the two I2C pins, taken away for one experiment:
+		no P05/P02 setup, no reset pulse on P07, no 300ms wait, no MPC
+		writes, no probe. Just the bus.
+
+		Read the result with care. This also stops the panel being
+		reset, and a panel that does not answer NACKs the first address
+		frame, so every transaction after it is nine clocks instead of a
+		hundred. "No fault" would then mean "hardly any bus activity",
+		which is the same trap the probe stub fell into. Check that
+		touches still register before believing anything this build
+		says.
+	*/
+	i2c_swap = 1;
+	i2cinit();
+	envision_i2c_trace[3] = 2;
+	return;
+#else
 	/* P05: user button, input. Not used here, but left in a known state. */
 	PORT0.PMR.BIT.B5 = 0;
 	PORT0.PDR.BIT.B5 = 0;
@@ -415,6 +434,7 @@ void	envision_touch_init(void)
 		envision_i2c_trace[3] = 0;
 	else
 		envision_i2c_trace[3] = (i2c_swap)? 2 : 1;
+#endif
 }
 
 
