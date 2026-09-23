@@ -78,6 +78,18 @@ int	main(void)
 	W	i;
 
 	envision_clock_init();
+#ifdef	DIAG12_ROMCE
+	/*
+		-DDIAG12_ROMCE: the ROM cache on. Every fault is an instruction
+		that is right in the flash and wrong where the processor fetched
+		it, so fetching from the cache instead is the obvious thing to
+		try.
+	*/
+	FLASH.ROMCIV.BIT.ROMCIV = 1;
+	while ((FLASH.ROMCIV.BIT.ROMCIV))
+		;
+	FLASH.ROMCE.BIT.ROMCEN = 1;
+#endif
 	(void)i2cprobe(ADDR);
 	i2c_swap = 1;		/* this board's, whether or not ADDR answered */
 
