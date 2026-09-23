@@ -77,6 +77,22 @@
 #define	DIAG9_CONSOLE	1
 #endif
 
+/*
+	-DDIAG9_CONSOLE_OFF_AT_RUNTIME=1 compiles every line of the console in
+	and then never switches it on.
+
+	Step 1 with the console failed three runs out of three and without it
+	passed, which looked like the console's doing - until one of the three
+	stopped inside i2cprobe, before the console had been enabled at all.
+	Whatever stopped it, it was not a console write. What the two builds
+	also differ in is simply the code: how much there is and where it lands.
+	This build has the console build's code and layout and none of its
+	activity, so it says which of the two the difference was.
+*/
+#ifndef	DIAG9_CONSOLE_OFF_AT_RUNTIME
+#define	DIAG9_CONSOLE_OFF_AT_RUNTIME	0
+#endif
+
 #include	"lcdtp.h"
 #include	"envision_hw.h"
 #include	"debuglog.h"
@@ -212,7 +228,7 @@ int	main(void)
 	lcdtp_sendlogs("diag9 up\n");
 
 #if	DIAG9_CONSOLE
-	dbgcon_enable = 1;
+	dbgcon_enable = !DIAG9_CONSOLE_OFF_AT_RUNTIME;
 	/*
 		Name the build on the way out. A capture that does not say which
 		step produced it is worth very little a day later, and this is
