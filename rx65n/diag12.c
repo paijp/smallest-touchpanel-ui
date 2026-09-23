@@ -80,7 +80,24 @@ int	main(void)
 	UW	n;
 	W	i;
 
+#ifdef	DIAG12_HOCO
+	/*
+		-DDIAG12_HOCO: the 16MHz on-chip oscillator, every divider 1, no
+		PLL and no main oscillator. The instructions that go wrong are
+		right in the flash, so the next suspect is the clock they are
+		executed at. envision_delay_ms() is calibrated for 120MHz, so
+		everything here runs about 7.5 times slower.
+	*/
+	SYSTEM.PRCR.WORD = 0xa50f;
+	SYSTEM.HOCOCR.BIT.HCSTP = 0;
+	while (!(SYSTEM.OSCOVFSR.BIT.HCOVF))
+		;
+	SYSTEM.SCKCR.LONG = 0;
+	SYSTEM.SCKCR3.BIT.CKSEL = 1;
+	SYSTEM.PRCR.WORD = 0xa500;
+#else
 	envision_clock_init();
+#endif
 #ifdef	DIAG12_ROMCE
 	/*
 		-DDIAG12_ROMCE: the ROM cache on. Every fault is an instruction
