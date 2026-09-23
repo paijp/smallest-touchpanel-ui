@@ -95,6 +95,38 @@ int	main(void)
 	SYSTEM.SCKCR.LONG = 0;
 	SYSTEM.SCKCR3.BIT.CKSEL = 1;
 	SYSTEM.PRCR.WORD = 0xa500;
+#elif	defined(DIAG12_PLLHOCO)
+	/*
+		-DDIAG12_PLLHOCO: the same 240MHz PLL and the same dividers as
+		envision_clock_init(), but locked to the 16MHz on-chip oscillator
+		(x15) instead of the 12MHz resonator. If HOCO alone is clean and
+		this is too, the resonator is the difference; if this faults, it
+		is the speed or the PLL.
+	*/
+	SYSTEM.PRCR.WORD = 0xa50f;
+	SYSTEM.HOCOCR2.BYTE = 0;		/* 16MHz */
+	SYSTEM.HOCOCR.BIT.HCSTP = 0;
+	while (!(SYSTEM.OSCOVFSR.BIT.HCOVF))
+		;
+	SYSTEM.ROMWT.BIT.ROMWT = 2;
+	while (SYSTEM.ROMWT.BIT.ROMWT != 2)
+		;
+	SYSTEM.PLLCR.BIT.PLIDIV = 0;
+	SYSTEM.PLLCR.BIT.PLLSRCSEL = 1;		/* HOCO */
+	SYSTEM.PLLCR.BIT.STC = 29;		/* x15 */
+	SYSTEM.PLLCR2.BIT.PLLEN = 0;
+	while (!(SYSTEM.OSCOVFSR.BIT.PLOVF))
+		;
+	SYSTEM.SCKCR.BIT.ICK = 1;
+	SYSTEM.SCKCR.BIT.FCK = 2;
+	SYSTEM.SCKCR.BIT.PCKA = 1;
+	SYSTEM.SCKCR.BIT.PCKB = 2;
+	SYSTEM.SCKCR.BIT.PCKC = 2;
+	SYSTEM.SCKCR.BIT.PCKD = 2;
+	SYSTEM.SCKCR.BIT.PSTOP0 = 1;
+	SYSTEM.SCKCR.BIT.PSTOP1 = 1;
+	SYSTEM.SCKCR3.BIT.CKSEL = 4;
+	SYSTEM.PRCR.WORD = 0xa500;
 #else
 	envision_clock_init();
 #endif
