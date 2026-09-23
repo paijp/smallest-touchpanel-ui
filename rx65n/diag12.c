@@ -78,6 +78,7 @@ int	main(void)
 
 	envision_clock_init();
 	(void)i2cprobe(ADDR);
+	i2c_swap = 1;		/* this board's, whether or not ADDR answered */
 
 	for (n = 0; ; n++) {
 		diag12_n = n;
