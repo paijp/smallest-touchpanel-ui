@@ -21,6 +21,9 @@
 	               4  SCL and SDA both low, then both released, each bit
 	               5  SDA low, SCL low, SCL released, SDA released
 	                  (a start then a stop, with no bits in between)
+	               6  as 1, but SCL released through i2cscl_high(), which
+	                  reads it back from PIDR until it is high
+	               7  no pin moved; each bit reads PIDR 16 times
 
 	No display, no console: the fault handler's breakpoint and diag12_n,
 	the pass count, are the result.
@@ -151,7 +154,7 @@ int	main(void)
 		(void)read7(buf);
 #else
 		for (i = 0; i < BITS; i++) {
-#if	DIAG12_MODE == 1
+#if	DIAG12_MODE == 1 || DIAG12_MODE == 6
 			scl_set(0);
 #elif	DIAG12_MODE == 2
 			sda_set(0);
@@ -165,7 +168,16 @@ int	main(void)
 #endif
 			i2cwait();
 			i2cwait();
-#if	DIAG12_MODE == 1
+#if	DIAG12_MODE == 6
+			i2cscl_high();
+#elif	DIAG12_MODE == 7
+			{
+				W	k;
+
+				for (k = 0; k < 16; k++)
+					(void)sda_get();
+			}
+#elif	DIAG12_MODE == 1
 			scl_set(1);
 #elif	DIAG12_MODE == 2
 			sda_set(1);
