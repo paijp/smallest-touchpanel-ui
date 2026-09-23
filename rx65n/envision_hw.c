@@ -155,9 +155,33 @@ void	envision_clock_init(void)
 	while (SYSTEM.OSCOVFSR.BIT.PLOVF == 0)
 		__asm__ __volatile__ ("nop");
 
+#ifdef	ENVISION_ICLK_60
+	/*
+		For one experiment: the processor at half speed.
+
+		The fault this port is chasing looks like instruction fetch going
+		wrong - undefined instructions and PCs one byte into a valid
+		instruction - and whether it appears depends on nothing more than
+		how the code is laid out: a build with the console compiled in but
+		never switched on faults, the same program without it does not.
+		That pattern fits a fetch with too little margin, from the clock,
+		the supply, or the flash wait states. Halving ICLK widens every one
+		of those margins at once, so if the fault survives this, all three
+		are ruled out together.
+
+		PCLKA comes down with it because the peripheral clocks must not
+		run faster than ICLK. The panel's dot clock is taken from the PLL
+		directly, not from either, so the display is unaffected; the delay
+		loops calibrated for 120MHz simply run twice as long.
+	*/
+	SYSTEM.SCKCR.BIT.ICK = 2;		/* ICLK   60MHz */
+	SYSTEM.SCKCR.BIT.FCK = 2;		/* FCLK   60MHz */
+	SYSTEM.SCKCR.BIT.PCKA = 2;		/* PCLKA  60MHz */
+#else
 	SYSTEM.SCKCR.BIT.ICK = 1;		/* ICLK  120MHz */
 	SYSTEM.SCKCR.BIT.FCK = 2;		/* FCLK   60MHz */
 	SYSTEM.SCKCR.BIT.PCKA = 1;		/* PCLKA 120MHz */
+#endif
 	SYSTEM.SCKCR.BIT.PCKB = 2;		/* PCLKB  60MHz */
 	SYSTEM.SCKCR.BIT.PCKC = 2;		/* PCLKC  60MHz */
 	SYSTEM.SCKCR.BIT.PCKD = 2;		/* PCLKD  60MHz */
