@@ -18,6 +18,9 @@
 	               1  + SCL toggled (PODR), low and released each bit
 	               2  + SDA toggled the same way, SCL left alone
 	               3  the whole read7(), as diag11 does
+	               4  SCL and SDA both low, then both released, each bit
+	               5  SDA low, SCL low, SCL released, SDA released
+	                  (a start then a stop, with no bits in between)
 
 	No display, no console: the fault handler's breakpoint and diag12_n,
 	the pass count, are the result.
@@ -103,12 +106,26 @@ int	main(void)
 			scl_set(0);
 #elif	DIAG12_MODE == 2
 			sda_set(0);
+#elif	DIAG12_MODE == 4
+			scl_set(0);
+			sda_set(0);
+#elif	DIAG12_MODE == 5
+			sda_set(0);
+			i2cwait();
+			scl_set(0);
 #endif
 			i2cwait();
 			i2cwait();
 #if	DIAG12_MODE == 1
 			scl_set(1);
 #elif	DIAG12_MODE == 2
+			sda_set(1);
+#elif	DIAG12_MODE == 4
+			scl_set(1);
+			sda_set(1);
+#elif	DIAG12_MODE == 5
+			scl_set(1);
+			i2cwait();
 			sda_set(1);
 #endif
 			i2cwait();
