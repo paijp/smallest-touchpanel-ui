@@ -32,10 +32,11 @@
 #define	DIAG12_MODE	0
 #endif
 
-/* -DADDR=0x39 addresses nobody: the same traffic, never answered */
-#ifndef	ADDR
-#define	ADDR	0x38		/* FT5x06 */
+/* -DDIAG12_ADDR=0x39 addresses nobody: the same traffic, never answered */
+#ifndef	DIAG12_ADDR
+#define	DIAG12_ADDR	0x38	/* FT5x06 */
 #endif
+#define	ADDR	DIAG12_ADDR
 
 /* about what read7() does: four address/register bytes and seven data */
 #define	BITS	(11 * 9 + 8)
