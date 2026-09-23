@@ -154,19 +154,37 @@ static	void	i2cscl_high(void)
 	pull-up, released - so this does not need to know which is which. ODR0
 	holds two bits per pin, hence B0 for P00 and B2 for P01.
 */
+/*
+	I2C_DSCR is the drive capacity of the two pins: 1 is the high-drive
+	setting this used from the start, 0 the normal one.
+
+	High drive buys nothing on an open-drain bus - the pull-ups set the
+	rising edge and a normal-drive pin sinks far more than the bus needs -
+	and it makes every falling edge a bigger, faster current step. It is a
+	switch for one experiment: the fault this port is chasing is an
+	instruction fetched wrong, at a valid address holding a valid
+	instruction, in the delay loop straight after a pin change, only when
+	the bus is being driven every pass, and unchanged at half the clock.
+	That is the shape of a supply disturbance, and the pins are the
+	obvious thing disturbing it.
+*/
+#ifndef	I2C_DSCR
+#define	I2C_DSCR	1
+#endif
+
 static	void	i2cinit(void)
 {
 	PORT0.PMR.BIT.B0 = 0;
 	PORT0.PCR.BIT.B0 = 0;
 	PORT0.ODR0.BIT.B0 = 1;
-	PORT0.DSCR.BIT.B0 = 1;
+	PORT0.DSCR.BIT.B0 = I2C_DSCR;
 	PORT0.PODR.BIT.B0 = 1;
 	PORT0.PDR.BIT.B0 = 1;
 
 	PORT0.PMR.BIT.B1 = 0;
 	PORT0.PCR.BIT.B1 = 0;
 	PORT0.ODR0.BIT.B2 = 1;
-	PORT0.DSCR.BIT.B1 = 1;
+	PORT0.DSCR.BIT.B1 = I2C_DSCR;
 	PORT0.PODR.BIT.B1 = 1;
 	PORT0.PDR.BIT.B1 = 1;
 
