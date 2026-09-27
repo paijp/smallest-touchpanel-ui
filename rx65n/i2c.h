@@ -103,6 +103,31 @@ static	W	sda_get(void)
 /* set by i2cscl_high() when a device held the clock past the limit */
 static	W	i2c_stretch_timeouts = 0;
 
+/*
+	-DI2C_MARK makes every step of a transaction emit one character as it
+	happens, through a hook the program supplies.
+
+	A trace kept in RAM cannot be read back once the target has stopped - there
+	is no debugger in this path, which is the whole point of it - so a hang
+	inside here would leave the counters saying only where they were the last
+	time anything read them. Emitting as we go means the log simply ends at the
+	last step reached.
+
+	It is slow and it is noisy: every character waits for the transmitter, so
+	the bus timing is nothing like a normal run. For finding where something
+	stops that does not matter; for anything else, leave it off.
+
+	    I  i2cinit          s  start             P  stop
+	    a  address byte     r  read byte         w  write byte
+	    p  probe attempt    +  probe answered    -  probe did not
+*/
+#ifdef	I2C_MARK
+extern	void	i2c_mark(W c);
+#define	I2CMARK(c)	i2c_mark(c)
+#else
+#define	I2CMARK(c)	do { } while (0)
+#endif
+
 extern	void	(*lcdtp_polltask)();		/* lcdtp.c */
 
 
@@ -174,6 +199,7 @@ static	void	i2cscl_high(void)
 
 static	void	i2cinit(void)
 {
+	I2CMARK('I');
 	PORT0.PMR.BIT.B0 = 0;
 	PORT0.PCR.BIT.B0 = 0;
 	PORT0.ODR0.BIT.B0 = 1;
@@ -194,6 +220,7 @@ static	void	i2cinit(void)
 
 static	void	i2cstart(void)
 {
+	I2CMARK('s');
 	/* works as a repeated start too: put both lines up first */
 	sda_set(1);
 	i2cwait();
@@ -209,6 +236,7 @@ static	void	i2cstart(void)
 
 static	void	i2cstop(void)
 {
+	I2CMARK('P');
 	scl_set(0);
 	i2cwait();
 	sda_set(0);
@@ -224,6 +252,7 @@ static	void	i2cstop(void)
 /* returns 0 when the device acknowledged, 1 when it did not */
 static	W	i2csend(W data)
 {
+	I2CMARK('w');
 	W	i, nak;
 
 	for (i = 0; i < 8; i++) {
@@ -250,6 +279,7 @@ static	W	i2csend(W data)
 /* nak = 1 on the last byte of a read, so the device stops driving */
 static	W	i2crecv(W nak)
 {
+	I2CMARK('r');
 	W	i, ret;
 
 	sda_set(1);
@@ -324,15 +354,18 @@ static	W	i2cprobe(W addr)
 	W	tries;
 
 	for (tries = 0; tries < 2; tries++) {
+		I2CMARK('p');
 		i2cinit();
 		i2cstart();
 		if (!i2csend(addr << 1)) {
 			i2cstop();
+			I2CMARK('+');
 			return 1;
 		}
 		i2cstop();
 		i2c_swap = !i2c_swap;
 	}
+	I2CMARK('-');
 	return 0;
 #endif
 }

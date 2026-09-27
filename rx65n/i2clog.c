@@ -95,6 +95,18 @@ extern	char	istack[];
 #define	BLINK_PASSES	2
 
 
+/*
+	The hook i2c.h calls with -DI2C_MARK. One character per step of every
+	transaction, straight out of the serial port as it happens, so a hang
+	inside the I2C leaves the log ending at the last step reached. A trace kept
+	in RAM could not be read back: there is no debugger in this path.
+*/
+void	i2c_mark(W c)
+{
+	seriallog_putc(c);
+}
+
+
 static	void	log_dec(const char *label, UW v)
 {
 	lcdtp_sendlogs(label);
@@ -169,6 +181,11 @@ int	main(void)
 	*CANARY_STACK = CANARY;
 	*CANARY_BSS = CANARY;
 
+#ifdef	I2C_MARK
+	lcdtp_sendlogs("i2c marks on: I init s start P stop w write r read"
+		       " p probe + answered - not\r\n");
+#endif
+
 	lcdtp_sendlogs("polltask before = ");
 	lcdtp_sendloguw((UW)lcdtp_polltask);
 	lcdtp_sendlogs("  bss ");
@@ -180,7 +197,9 @@ int	main(void)
 	lcdtp_polltask = NULL;
 
 	log_interrupt_state("before touch init");
+	lcdtp_sendlogs("touch init: ");
 	envision_touch_init();
+	lcdtp_sendlogs(" done\r\n");
 	log_interrupt_state("after touch init");
 
 #ifdef	WITH_GLCDC
@@ -196,7 +215,9 @@ int	main(void)
 	for (;;) {
 		x = -1;
 		y = -1;
+		lcdtp_sendlogs("[");
 		touched = envision_touch_get_raw(&x, &y);
+		lcdtp_sendlogs("] ");
 		pass++;
 
 		/*
