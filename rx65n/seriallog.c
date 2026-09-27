@@ -43,6 +43,14 @@
 	never arrives - a hang, in a log call, which is the worst place for one.
 */
 static	W	seriallog_ready = 0;
+static	UW	seriallog_drops = 0;
+
+/*
+	Long enough that a healthy transmitter never hits it - one character at
+	115200 is about 87us, and this is several milliseconds of spinning at
+	60MHz - and short enough that a stalled one does not stop the program.
+*/
+#define	SERIALLOG_SPIN	200000UL
 
 
 void	seriallog_init(void)
@@ -72,11 +80,24 @@ void	seriallog_init(void)
 
 void	seriallog_putc(W c)
 {
+	UW	spin;
+
 	if (!(seriallog_ready))
 		return;
-	while (SCI1.SSR.BIT.TDRE == 0)
-		;
+
+	for (spin = 0; SCI1.SSR.BIT.TDRE == 0; spin++) {
+		if (spin >= SERIALLOG_SPIN) {
+			seriallog_drops++;
+			return;
+		}
+	}
 	SCI1.TDR = (UB)c;
+}
+
+
+UW	seriallog_dropped(void)
+{
+	return seriallog_drops;
 }
 
 

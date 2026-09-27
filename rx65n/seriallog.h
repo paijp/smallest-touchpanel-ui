@@ -28,10 +28,20 @@
 	need the debugger at all - which matters because that path, through
 	e2-server-gdb and RRM/DMM, is the one that would not hold still.
 
-	The cost is that transmission is blocking: put_char() spins until the
-	transmit register is free, so logging inside a tight loop paces that loop
-	at the baud rate. That is a feature when reading a trace and a hazard
-	inside anything timing-critical, so keep it out of interrupt handlers.
+	Transmission paces the caller - seriallog_putc() waits for the transmit
+	register to free up, so logging inside a tight loop runs that loop at the
+	baud rate. That is a feature when reading a trace and a hazard inside
+	anything timing-critical, so keep it out of interrupt handlers.
+
+	The wait is bounded, and that bound is load-bearing rather than tidiness.
+	An unbounded one cost a debugging session: a run stopped in the middle of
+	a log line, and the natural conclusion was that the board had stopped -
+	when a transmitter that had stalled for any reason would look exactly the
+	same, because the program would be sitting in the log call for ever. The
+	same trap the original I2C driver here fell into, reintroduced one file
+	away from the comment criticising it. Now a stalled transmitter drops
+	characters and counts them, the caller carries on, and a frozen display
+	means the program really has stopped.
 
 	SERIALLOG_BAUD picks the rate at build time. Only rates the probe can
 	itself be set to are useful, since it divides a 3 MHz reference:
@@ -62,8 +72,19 @@
 */
 void	seriallog_init(void);
 
-/* Blocks until the character is handed to the transmitter. */
+/*
+	Hands the character to the transmitter, waiting for room with a bound. A
+	character that cannot be sent is dropped and counted rather than waited
+	on for ever.
+*/
 void	seriallog_putc(W c);
+
+/*
+	How many characters have been dropped because the transmitter did not free
+	up in time. Zero on a healthy link; anything else says the log has gaps
+	and how many.
+*/
+UW	seriallog_dropped(void);
 
 /*
 	Returns the next received byte, or -1 when none has arrived. Receive

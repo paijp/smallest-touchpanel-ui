@@ -33,12 +33,25 @@
 	it skips the power-up gate and always puts a transaction on the bus, so
 	the trace is filled even when the gate would never have opened.
 
+	The whole trace is copied into a local array the moment the call returns
+	and printed from the copy, as raw words. A first version printed selected
+	fields straight out of the live array and produced a reading that could not
+	happen - "gave up at the write address" together with "still in the receive
+	loop" - which wasted time on a contradiction that was in the printing, not
+	on the bus. Print the bytes, then interpret them.
+
+	SCI1's own SCR and SSR go on the line too. A log that stops mid-line looks
+	the same whether the program stopped or the transmitter did, and those two
+	registers say which.
+
 	One line per pass:
 
-	    2.400 n=12 ok=12 gaveup=0 step=14 pin=1 int=1 pts=1 nak=0/0 str=0 |
-	          01 01 8a 00 ad 00 00 | x=394 y=173
+	    2.400 n=12 ok=12 gaveup=0 step=14 pin=1 int=1 pts=1 nak=0/0 str=0
+	          drops=0 scr=30 ssr=84 | 01 01 8a 00 ad 00 00 | x=394 y=173
+	          trace 0000 0000 ...
 */
 
+#include	"iodefine.h"
 #include	"lcdtp.h"
 #include	"envision_hw.h"
 #include	"debuglog.h"
@@ -120,6 +133,8 @@ int	main(void)
 	W	x, y, touched, i;
 	UB	buf[96];
 	UB	*p;
+	UW	trace[ENVISION_I2C_TRACE_N];
+	UB	scr, ssr;
 
 	envision_clock_init();
 	seriallog_init();
@@ -148,22 +163,31 @@ int	main(void)
 		x = -1;
 		y = -1;
 		touched = envision_touch_get_raw(&x, &y);
+
+		/*
+			Snapshot first. Everything below reads the copy, so no two
+			fields on a line can come from different moments.
+		*/
+		for (i = 0; i < ENVISION_I2C_TRACE_N; i++)
+			trace[i] = envision_i2c_trace[i];
+		scr = SCI1.SCR.BYTE;
+		ssr = SCI1.SSR.BYTE;
 		pass++;
 
 		/* --- the screen --- */
 
 		for (i = 0; i < 8; i++) {
-			put_dec(buf, (W)envision_i2c_trace[i]);
+			put_dec(buf, (W)trace[i]);
 			draw_row(2 + i, VAL_X, buf,
 				 (i == 0 || i == 1 || i == 2 || i == 4)?
-					((envision_i2c_trace[i])? C_BAD : C_OK)
+					((trace[i])? C_BAD : C_OK)
 					: C_TEXT,
 				 90);
 		}
 
 		p = buf;
 		for (i = 0; i < 7; i++) {
-			p = put_hex2(p, envision_i2c_trace[8 + i]);
+			p = put_hex2(p, trace[8 + i]);
 			*p++ = ' ';
 		}
 		*p = 0;
@@ -195,27 +219,33 @@ int	main(void)
 		lcdtp_sendlogs(" n=");
 		lcdtp_sendlogdec((W)pass);
 		lcdtp_sendlogs(" ok=");
-		lcdtp_sendlogdec((W)envision_i2c_trace[7]);
+		lcdtp_sendlogdec((W)trace[7]);
 		lcdtp_sendlogs(" gaveup=");
-		lcdtp_sendlogdec((W)envision_i2c_trace[4]);
+		lcdtp_sendlogdec((W)trace[4]);
 		lcdtp_sendlogs(" step=");
-		lcdtp_sendlogdec((W)envision_i2c_trace[15]);
+		lcdtp_sendlogdec((W)trace[15]);
 		lcdtp_sendlogs(" pin=");
-		lcdtp_sendlogdec((W)envision_i2c_trace[3]);
+		lcdtp_sendlogdec((W)trace[3]);
 		lcdtp_sendlogs(" int=");
-		lcdtp_sendlogdec((W)envision_i2c_trace[6]);
+		lcdtp_sendlogdec((W)trace[6]);
 		lcdtp_sendlogs(" pts=");
-		lcdtp_sendlogdec((W)envision_i2c_trace[5]);
+		lcdtp_sendlogdec((W)trace[5]);
 		lcdtp_sendlogs(" nak=");
-		lcdtp_sendlogdec((W)envision_i2c_trace[0]);
+		lcdtp_sendlogdec((W)trace[0]);
 		lcdtp_sendlogs("/");
-		lcdtp_sendlogdec((W)envision_i2c_trace[1]);
+		lcdtp_sendlogdec((W)trace[1]);
 		lcdtp_sendlogs(" str=");
-		lcdtp_sendlogdec((W)envision_i2c_trace[2]);
+		lcdtp_sendlogdec((W)trace[2]);
+		lcdtp_sendlogs(" drops=");
+		lcdtp_sendlogdec((W)seriallog_dropped());
+		lcdtp_sendlogs(" scr=");
+		lcdtp_sendlogub(scr);
+		lcdtp_sendlogs(" ssr=");
+		lcdtp_sendlogub(ssr);
 
 		lcdtp_sendlogs(" | ");
 		for (i = 0; i < 7; i++) {
-			lcdtp_sendlogub(envision_i2c_trace[8 + i]);
+			lcdtp_sendlogub(trace[8 + i]);
 			lcdtp_sendlogs(" ");
 		}
 
@@ -227,6 +257,15 @@ int	main(void)
 			lcdtp_sendlogdec(y);
 		} else {
 			lcdtp_sendlogs("no contact");
+		}
+		/*
+			And the trace as raw words, so a field that was read wrongly
+			above can still be recovered from the line.
+		*/
+		lcdtp_sendlogs(" | trace");
+		for (i = 0; i < ENVISION_I2C_TRACE_N; i++) {
+			lcdtp_sendlogs(" ");
+			lcdtp_sendloguh(trace[i]);
 		}
 		lcdtp_sendlogs("\r\n");
 
