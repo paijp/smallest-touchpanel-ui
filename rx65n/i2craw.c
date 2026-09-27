@@ -190,9 +190,21 @@ int	main(void)
 
 	envision_clock_init();
 	seriallog_init();
+
+	/*
+		A marker after every init step, before anything else happens.
+		The first version printed its banner only once all of them had
+		returned, so a run that hung inside one of them produced no output at
+		all and said nothing about which. The serial port is up from the second
+		line onwards, so everything after it can report.
+	*/
+	lcdtp_sendlogs("\r\ninit: clock, serial\r\n");
 	envision_lcd_init();
+	lcdtp_sendlogs("init: lcd\r\n");
 	envision_touch_init();
+	lcdtp_sendlogs("init: touch\r\n");
 	init_lcdtp();
+	lcdtp_sendlogs("init: lcdtp\r\n");
 
 	lcdtp_sendlogs("\r\n--- i2craw: touch controller bytes, every ");
 	lcdtp_sendlogdec(PERIOD_MS);
