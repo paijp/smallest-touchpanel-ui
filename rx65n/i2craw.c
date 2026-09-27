@@ -40,6 +40,17 @@
 	loop" - which wasted time on a contradiction that was in the printing, not
 	on the bus. Print the bytes, then interpret them.
 
+How much stack the program is using goes on the line as well. The layout the
+	demo's linker script gives is cramped - the user stack top is at 0x500 with
+	the interrupt stack directly below at 0x100, so 1 KB, and .data starts at
+	0x504, four bytes above the stack top. The trace has shown readings that
+	cannot happen from one execution of touch_read() - "gave up at the write
+	address" with nak clear and the step counter in the middle of the receive
+	loop - and memory being written by something other than the code that owns
+	it is the explanation that fits. So this measures the stack rather than
+	arguing about it: the unused part is filled with a pattern at startup and
+	scanned each pass for the deepest word that has been disturbed.
+
 	SCI1's own SCR and SSR go on the line too. A log that stops mid-line looks
 	the same whether the program stopped or the transmitter did, and those two
 	registers say which.
@@ -71,6 +82,40 @@
 #define	C_OK		0x07e0
 #define	C_BAD		0xf800
 #define	C_RAW		0xffe0
+
+
+/*
+	Bounds of the user stack, from the linker script. It grows down from
+	_ustack toward _istack.
+*/
+extern	char	_ustack[];
+extern	char	_istack[];
+
+#define	STACK_PATTERN	0xa5a5a5a5UL
+
+/* Leave a margin below the current frame so filling does not clobber it. */
+#define	STACK_MARGIN	64
+
+
+static	void	stack_fill(void)
+{
+	volatile UW	*p = (volatile UW*)((UW)_istack + 16);
+	UW		here = (UW)__builtin_frame_address(0);
+
+	while ((UW)p + STACK_MARGIN < here)
+		*p++ = STACK_PATTERN;
+}
+
+
+/* Bytes from the stack top that have been touched since stack_fill(). */
+static	UW	stack_used(void)
+{
+	volatile UW	*p = (volatile UW*)((UW)_istack + 16);
+
+	while ((UW)p < (UW)_ustack && *p == STACK_PATTERN)
+		p++;
+	return (UW)_ustack - (UW)p;
+}
 
 
 static	const char	*trace_label[8] = {
@@ -135,6 +180,8 @@ int	main(void)
 	UB	*p;
 	UW	trace[ENVISION_I2C_TRACE_N];
 	UB	scr, ssr;
+
+	stack_fill();
 
 	envision_clock_init();
 	seriallog_init();
@@ -242,6 +289,10 @@ int	main(void)
 		lcdtp_sendlogub(scr);
 		lcdtp_sendlogs(" ssr=");
 		lcdtp_sendlogub(ssr);
+		lcdtp_sendlogs(" stk=");
+		lcdtp_sendlogdec((W)stack_used());
+		lcdtp_sendlogs("/");
+		lcdtp_sendlogdec((W)((UW)_ustack - (UW)_istack));
 
 		lcdtp_sendlogs(" | ");
 		for (i = 0; i < 7; i++) {
