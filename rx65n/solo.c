@@ -52,8 +52,24 @@
 	The backlight is the liveness signal: solid while a contact is reported,
 	blinking otherwise, dark only if the MCU was reset or lost power.
 
-	Build:  rx-elf-gcc -mcpu=rx64m -O2 -nostartfiles -Igenerate \
-	            solo.c generate/vects.c generate/start.S \
+	-DSOLO_RAMCODE puts every function in RAM and runs it from there.
+
+	This is the one experiment left that can be decided. The port's notes say
+	the fault looks like an instruction fetched wrong at a valid address
+	holding a valid instruction, and the disassembly agrees: the code is
+	correct, every loop is bounded, and it still leaves the source's control
+	flow. If the fetch itself is what goes wrong, fetching from RAM instead of
+	flash should change the answer - and if it does not, the flash read path is
+	ruled out too.
+
+	It needs the linker script patched to add a .ramfunc section; see
+	tools/patch-ramfunc.py. main() stays in ROM, copies the section, and only
+	then calls anything in it.
+
+	Build:  bash tools/patch-ramfunc.py generate/linker_script.ld
+	        rx-elf-gcc -mcpu=rx64m -O2 -nostartfiles -Igenerate -DSOLO_RAMCODE \
+	            solo.c generate/hwinit.c generate/inthandler.c \
+	            generate/vects.c generate/start.S \
 	            -T generate/linker_script.ld -o solo.elf
 */
 
@@ -111,6 +127,19 @@ typedef unsigned long		UW;
 #endif
 
 
+/*
+	With -DSOLO_RAMCODE every function below carries this, and the linker puts
+	them all in a section whose addresses are in RAM while its contents load
+	from ROM. noinline keeps them from being folded back into main(), which
+	stays in ROM because it is what does the copying.
+*/
+#ifdef	SOLO_RAMCODE
+#define	RAMFUNC	__attribute__((section(".ramfunc"), noinline))
+#else
+#define	RAMFUNC
+#endif
+
+
 /* ---- serial ---- */
 
 static	UW	tx_drops = 0;
@@ -144,7 +173,7 @@ static	void	sci1_init(void)
 	program - the distinction between "stopped" and "the log stopped" cost a
 	session once already.
 */
-static	void	putc1(W c)
+static	RAMFUNC	void	putc1(W c)
 {
 	UW	spin;
 
@@ -158,14 +187,14 @@ static	void	putc1(W c)
 }
 
 
-static	void	puts1(const char *s)
+static	RAMFUNC	void	puts1(const char *s)
 {
 	while ((*s))
 		putc1(*s++);
 }
 
 
-static	void	putdec1(UW v)
+static	RAMFUNC	void	putdec1(UW v)
 {
 	UB	buf[12];
 	W	n = 0;
@@ -183,7 +212,7 @@ static	void	putdec1(UW v)
 }
 
 
-static	void	puthex1(UW v, W digits)
+static	RAMFUNC	void	puthex1(UW v, W digits)
 {
 	static	const char	*bin2hex = "0123456789abcdef";
 	W	i;
@@ -243,7 +272,7 @@ static	void	clock_init(void)
 }
 
 
-static	void	delay_us(UW us)
+static	RAMFUNC	void	delay_us(UW us)
 {
 	volatile UW	i;
 
@@ -253,7 +282,7 @@ static	void	delay_us(UW us)
 }
 
 
-static	void	delay_ms(UW ms)
+static	RAMFUNC	void	delay_ms(UW ms)
 {
 	while (ms--)
 		delay_us(1000);
@@ -272,7 +301,7 @@ static	W	i2c_swap = 0;
 static	W	i2c_stretch_timeouts = 0;
 
 
-static	void	scl_set(W v)
+static	RAMFUNC	void	scl_set(W v)
 {
 	if ((i2c_swap))
 		PORT0.PODR.BIT.B1 = (UB)(v? 1 : 0);
@@ -281,13 +310,13 @@ static	void	scl_set(W v)
 }
 
 
-static	W	scl_get(void)
+static	RAMFUNC	W	scl_get(void)
 {
 	return ((i2c_swap)? PORT0.PIDR.BIT.B1 : PORT0.PIDR.BIT.B0)? 1 : 0;
 }
 
 
-static	void	sda_set(W v)
+static	RAMFUNC	void	sda_set(W v)
 {
 	if ((i2c_swap))
 		PORT0.PODR.BIT.B0 = (UB)(v? 1 : 0);
@@ -296,13 +325,13 @@ static	void	sda_set(W v)
 }
 
 
-static	W	sda_get(void)
+static	RAMFUNC	W	sda_get(void)
 {
 	return ((i2c_swap)? PORT0.PIDR.BIT.B0 : PORT0.PIDR.BIT.B1)? 1 : 0;
 }
 
 
-static	void	i2cwait(void)
+static	RAMFUNC	void	i2cwait(void)
 {
 	volatile W	i;
 
@@ -311,7 +340,7 @@ static	void	i2cwait(void)
 }
 
 
-static	void	i2cscl_high(void)
+static	RAMFUNC	void	i2cscl_high(void)
 {
 	W	n;
 
@@ -323,7 +352,7 @@ static	void	i2cscl_high(void)
 }
 
 
-static	void	i2cinit(void)
+static	RAMFUNC	void	i2cinit(void)
 {
 	MARK('I');
 	PORT0.PMR.BIT.B0 = 0;
@@ -344,7 +373,7 @@ static	void	i2cinit(void)
 }
 
 
-static	void	i2cstart(void)
+static	RAMFUNC	void	i2cstart(void)
 {
 	MARK('s');
 	sda_set(1);				/* works as a repeated start too */
@@ -359,7 +388,7 @@ static	void	i2cstart(void)
 }
 
 
-static	void	i2cstop(void)
+static	RAMFUNC	void	i2cstop(void)
 {
 	MARK('P');
 	scl_set(0);
@@ -375,7 +404,7 @@ static	void	i2cstop(void)
 
 
 /* 0 when the device acknowledged, 1 when it did not */
-static	W	i2csend(W data)
+static	RAMFUNC	W	i2csend(W data)
 {
 	W	i, nak;
 
@@ -402,7 +431,7 @@ static	W	i2csend(W data)
 
 
 /* nak = 1 on the last byte, so the device stops driving */
-static	W	i2crecv(W nak)
+static	RAMFUNC	W	i2crecv(W nak)
 {
 	W	i, ret;
 
@@ -436,7 +465,7 @@ static	W	i2crecv(W nak)
 	Try both pin mappings and keep the one that answers. Returns 1 when
 	something did.
 */
-static	W	i2cprobe(void)
+static	RAMFUNC	W	i2cprobe(void)
 {
 	W	tries;
 
@@ -458,7 +487,7 @@ static	W	i2cprobe(void)
 
 
 /* Seven bytes from register 2. Returns 1 on a complete transaction. */
-static	W	touch_read(UB *buf)
+static	RAMFUNC	W	touch_read(UB *buf)
 {
 	W	i;
 
@@ -486,6 +515,18 @@ static	W	touch_read(UB *buf)
 }
 
 
+#ifdef	SOLO_RAMCODE
+/*
+	From the linker script. Declared without the leading underscore because the
+	compiler prepends one to every C identifier on RX, so `ramfunc` here is the
+	script's `_ramfunc`.
+*/
+extern	char	ramfunc[];
+extern	char	eramfunc[];
+extern	char	mramfunc[];
+#endif
+
+
 /* ---- the program ---- */
 
 int	main(void)
@@ -497,6 +538,21 @@ int	main(void)
 
 	clock_init();
 	sci1_init();
+
+#ifdef	SOLO_RAMCODE
+	/*
+		Copy the code before calling any of it. clock_init() and sci1_init()
+		above are deliberately left in ROM: they run before this, and main()
+		itself has to stay in ROM to be able to do the copying at all.
+	*/
+	{
+		UB	*d = (UB*)ramfunc;
+		const UB *src = (const UB*)mramfunc;
+
+		while (d < (UB*)eramfunc)
+			*d++ = *src++;
+	}
+#endif
 
 	/* Backlight and panel reset, without the display controller behind
 	   them: the light is the only liveness signal here. */
@@ -514,6 +570,14 @@ int	main(void)
 	putdec1(BRR_VALUE);
 	puts1("  dscr ");
 	putdec1(SOLO_DSCR);
+#ifdef	SOLO_RAMCODE
+	puts1("  code in RAM at ");
+	puthex1((UW)ramfunc, 8);
+	puts1("..");
+	puthex1((UW)eramfunc, 8);
+#else
+	puts1("  code in ROM");
+#endif
 	puts1("\r\n");
 
 	puts1("probe: ");
