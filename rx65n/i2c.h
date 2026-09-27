@@ -118,8 +118,12 @@ static	W	i2c_stretch_timeouts = 0;
 	stops that does not matter; for anything else, leave it off.
 
 	    I  i2cinit          s  start             P  stop
-	    a  address byte     r  read byte         w  write byte
+	    r  read byte        w  write byte
 	    p  probe attempt    +  probe answered    -  probe did not
+
+	i2cstop() is marked step by step as well - 1 to 9 - because that is where
+	a run was found to stop, and its body is nothing but pin writes and delay
+	loops. The digit says which one.
 */
 #ifdef	I2C_MARK
 extern	void	i2c_mark(W c);
@@ -237,15 +241,24 @@ static	void	i2cstart(void)
 static	void	i2cstop(void)
 {
 	I2CMARK('P');
+	I2CMARK('1');
 	scl_set(0);
+	I2CMARK('2');
 	i2cwait();
+	I2CMARK('3');
 	sda_set(0);
+	I2CMARK('4');
 	i2cwait();
+	I2CMARK('5');
 	i2cscl_high();
+	I2CMARK('6');
 	i2cwait();
+	I2CMARK('7');
 
 	sda_set(1);		/* data rises while the clock is high */
+	I2CMARK('8');
 	i2cwait();
+	I2CMARK('9');
 }
 
 
