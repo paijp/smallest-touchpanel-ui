@@ -28,6 +28,11 @@ bash fetch-lcdtp.sh
 make DEMO=lcdtp
 ```
 
+**Build it with `-O0` and without `--gc-sections`.** Neither is a preference:
+with any optimisation, or with `--gc-sections` on, the program stops within
+seconds of starting, and the section below has the measurements. This is the
+one setting in the build that has to be right.
+
 `fetch-lcdtp.sh` pulls two things: this port, and the `generate/` directory
 from [miniwinwm/RenesasEnvisionGCC](https://github.com/miniwinwm/RenesasEnvisionGCC)
 - the interrupt vectors, reset code, linker script and Renesas' generated
@@ -395,55 +400,78 @@ with a listener already attached, so a capture starts at the program's
 first byte. `BREAK` takes several locations, which is what a bisect needs,
 because this gdb stops answering once the target is running.
 
-### What it turned out to be: the instruction fetch
+### What it turned out to be: the build
 
-The fault is in fetching instructions from flash, and running the same code
-from RAM avoids it.
+`-O0`, and no `--gc-sections`. With those two the program runs; with any
+optimisation at all it stops within seconds. Measured on i2craw, 200 ms per
+pass, left untouched, 60 seconds of capture each:
 
-That was settled with `solo.c`, one file that links nothing - its own types,
-its own clock setup, its own SCI1, its own bit-banged I2C - so that the
-flash-resident build and the RAM-resident build differ in nothing but where
-the code lives. Built with `-DSOLO_RAMCODE`, which puts its functions in a
-`.ramfunc` section that loads from ROM and runs from RAM, it did 207 reads
-in 41 seconds with no failures. The same source, same compiler, same
-optimisation, fetched from flash, stopped on the first pass.
+| -O | `-ffunction-sections`, `-fdata-sections` | `--gc-sections` | code in | passes | how the log ended |
+|----|----|----|----|----|----|
+| -O2 | yes | yes | ROM | 5 / 0 / 18 | mid-line |
+| -O2 | no | no | ROM | 9 | mid-line |
+| -O1 | no | no | ROM | 1 | mid-line |
+| -Os | no | no | ROM | 0 | mid-line |
+| -O0 | yes | **yes** | ROM | 1 | one line, then nothing |
+| **-O0** | no | no | ROM | **115 / 136 / 212** | still running at the timeout |
+| **-O0** | yes | no | ROM | **212** | still running at the timeout |
+| -O0 | yes | yes | RAM | 17 | running, but seven times slower |
+| -O0 | yes | no | RAM | 28 | running, but seven times slower |
 
-Before that, what had been eliminated by measurement: the optimiser;
+"mid-line" is the telling column: the log stops in the middle of printing a
+line, so the program stopped, not the transmitter. The two configurations
+that survive end with a complete line and a CRLF, because the capture's
+timeout ended them rather than the board.
+
+Then the real test, which is touching the panel: `-O0` without
+`--gc-sections`, 645 passes over 129 seconds, touches reported with sensible
+coordinates, `gaveup=0` and `nak=0/0` and `drops=0` throughout, log ending
+cleanly. That is the case that used to freeze within a touch or two.
+
+So the flags this port needs are
+
+    -O0            and no --gc-sections
+
+`-ffunction-sections` and `-fdata-sections` make no difference either way
+(212 passes with them, 212 without), so they can stay.
+
+**This corrects what this file said before.** The earlier conclusion was that
+the fault was in fetching instructions from flash, on the strength of
+`solo.c` running 207 reads from RAM against a stop on the first pass from
+flash. That reading was confounded: every `-O0` test until now was made with
+`--gc-sections` still on, which breaks the program by itself, so `-O0` looked
+like no help. Running from RAM does help - the RAM builds survive where the
+optimised flash builds do not - but it is not the cleanest fix and it is not
+free: those builds get through seven times fewer passes in the same time,
+which is not explained. `-O0` with the ROM-resident layout is both faster and
+more reliable, so `tools/patch-ramtext.py` is kept for the record rather than
+needed.
+
+What `--gc-sections` discards that the program needs has not been identified.
+It is a flag this port added; upstream's project does not use it.
+
+Upstream's e2 studio project, for comparison, builds its only configuration
+(HardwareDebug) with no optimisation level set - so `-O0` - with
+`-fdata-sections` but not `-ffunction-sections`, no `--gc-sections`, and
+GCC 4.8.4 rather than the 14.2 here. Its `.cproject` also declares
+`stackLimit` 0x100 and passes `-Wstack-usage=0x100`, matching the 256-byte
+user stack its linker script lays out; this port raised that to 1 KB and
+measures 392-416 bytes in use, so the original is very tight. Its
+`.launch` file names the main clock outright - `-uInputClock= 12.0000` -
+which independently confirms the 12 MHz this port derives from the PLL
+settings, and `-uWorkRamAddress= 1000` for the debug monitor's work area,
+which lands inside this port's `.data` (0x504-0x1514) and so may account for
+the freezes seen in the gdb era specifically.
+
+Ruled out before that, each by measurement rather than by argument:
 interrupts (every IER byte zero, and the PSW I bit read back from the
 hardware); all eight exception handlers; a reset; the probe (it happens with
-SW1-1 off, so with the debugger disabled entirely); the pins' drive
-strength; halving ICLK; every library including newlib; and the display. The
-symptom that named it was a trace of one character per I2C step, printed as
-it happened: `pIswP123456789pIswswwswrrrrrrrP123456789rrrr...` - control
-inside `envision_touch_get_raw()` that does not follow the source's flow,
-ending in an `i2crecv` that never leaves. Reading the disassembly shows
-nothing wrong with the code; it is not the code.
-
-It has nothing to do with the software I2C's timing, which is not
-time-critical and may wait as long as it likes.
-
-So the working configuration for the whole port is the same trick applied to
-every function rather than to one file:
-
-    bash tools/patch-ramtext.py generate/linker_script.ld generate/start.S
-    make TARGET=i2craw
-
-`tools/patch-ramtext.py` takes `*(.text.*)` out of the ROM `.text` section -
-output sections are filled in the order the script lists them, so leaving it
-there means `.text` collects every function and the RAM section links empty -
-puts it in a `.ramtext` section whose addresses are in RAM and whose contents
-load from ROM after `.data`, and injects a stack-free copy loop at the top of
-`_PowerON_Reset`. The copy has to be there and not in `main()`, because
-`main()` is one of the functions being moved. `-ffunction-sections`, which
-this project already builds with, is what makes it possible at all: it is
-what puts each C function in its own `.text.<name>` while start.S's code
-stays in plain `.text`, and so in ROM.
-
-One thing about that section's address is worth knowing, because it cost a
-round: at `0x10000` - inside the RAM region the linker script declares, and
-clear of everything - the board produced no output at all, not even the
-banner, while the identical build at `0x2000` runs. The usable RAM stops
-short of what the script claims, so the section sits just above `.bss`.
+SW1-1 off, so with the debugger disabled entirely); the pins' drive strength;
+halving ICLK; every library including newlib; and the display. A register-by
+-register comparison against upstream found no divergence either: the GLCDC's
+~130 writes are identical bar the symbolic names, the clock sequence is
+identical with extra stabilisation waits added here, and there is no register
+upstream writes that this port does not.
 
 ## Licence
 
