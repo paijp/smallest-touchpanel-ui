@@ -50,6 +50,9 @@
 #include	"seriallog.h"
 
 
+/* From the linker script, for reporting where .bss ends. */
+extern	char	ebss[];
+
 #define	PERIOD_MS	200
 
 /* Blink the backlight every this many passes, so it is visibly alive. */
@@ -110,6 +113,33 @@ int	main(void)
 	lcdtp_sendlogdec(PERIOD_MS);
 	lcdtp_sendlogs("ms ---\r\n");
 
+	/*
+		The one way control can leave the I2C code. i2cwait(), in the inner
+		loop of every transaction, calls lcdtp_polltask() if it is non-NULL -
+		and every wait in i2c.h is a bounded for loop, so an indirect call
+		through this pointer is the only thing in there that can transfer
+		control somewhere unplanned.
+		
+		It lives in .bss and is meant to be NULL until someone sets it. Print
+		it before trusting that: if the startup code's .bss clearing did not
+		happen, it holds whatever survived the reset - RAM is not cleared by
+		one - and the I2C then calls it. That would be intermittent exactly as
+		observed, because whether the leftover word is zero depends on what ran
+		before.
+		
+		Then set it to NULL regardless, so the rest of the run cannot go that
+		way whatever it held.
+	*/
+	lcdtp_sendlogs("polltask before = ");
+	lcdtp_sendloguw((UW)lcdtp_polltask);
+	lcdtp_sendlogs("  bss ");
+	lcdtp_sendloguw((UW)&lcdtp_polltask);
+	lcdtp_sendlogs("..");
+	lcdtp_sendloguw((UW)ebss);
+	lcdtp_sendlogs("\r\n");
+
+	lcdtp_polltask = NULL;
+
 	log_interrupt_state("before touch init");
 	envision_touch_init();
 	log_interrupt_state("after touch init");
@@ -136,6 +166,8 @@ int	main(void)
 		lcdtp_sendlogdec((W)envision_i2c_trace[1]);
 		log_dec(" str=", envision_i2c_trace[2]);
 		log_dec(" drops=", seriallog_dropped());
+		lcdtp_sendlogs(" plt=");
+		lcdtp_sendloguw((UW)lcdtp_polltask);
 
 		lcdtp_sendlogs(" | ");
 		for (i = 0; i < 7; i++) {
