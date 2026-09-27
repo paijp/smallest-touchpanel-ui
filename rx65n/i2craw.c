@@ -88,8 +88,13 @@ How much stack the program is using goes on the line as well. The layout the
 	Bounds of the user stack, from the linker script. It grows down from
 	_ustack toward _istack.
 */
-extern	char	_ustack[];
-extern	char	_istack[];
+/*
+	Declared without the leading underscore: the compiler prepends one to every
+	C identifier on RX, so `ustack` here is the linker script's `_ustack`.
+	Spelling them `_ustack` in C asks for `__ustack`, which does not exist.
+*/
+extern	char	ustack[];
+extern	char	istack[];
 
 #define	STACK_PATTERN	0xa5a5a5a5UL
 
@@ -99,7 +104,7 @@ extern	char	_istack[];
 
 static	void	stack_fill(void)
 {
-	volatile UW	*p = (volatile UW*)((UW)_istack + 16);
+	volatile UW	*p = (volatile UW*)((UW)istack + 16);
 	UW		here = (UW)__builtin_frame_address(0);
 
 	while ((UW)p + STACK_MARGIN < here)
@@ -110,11 +115,11 @@ static	void	stack_fill(void)
 /* Bytes from the stack top that have been touched since stack_fill(). */
 static	UW	stack_used(void)
 {
-	volatile UW	*p = (volatile UW*)((UW)_istack + 16);
+	volatile UW	*p = (volatile UW*)((UW)istack + 16);
 
-	while ((UW)p < (UW)_ustack && *p == STACK_PATTERN)
+	while ((UW)p < (UW)ustack && *p == STACK_PATTERN)
 		p++;
-	return (UW)_ustack - (UW)p;
+	return (UW)ustack - (UW)p;
 }
 
 
@@ -292,7 +297,7 @@ int	main(void)
 		lcdtp_sendlogs(" stk=");
 		lcdtp_sendlogdec((W)stack_used());
 		lcdtp_sendlogs("/");
-		lcdtp_sendlogdec((W)((UW)_ustack - (UW)_istack));
+		lcdtp_sendlogdec((W)((UW)ustack - (UW)istack));
 
 		lcdtp_sendlogs(" | ");
 		for (i = 0; i < 7; i++) {
