@@ -395,6 +395,56 @@ with a listener already attached, so a capture starts at the program's
 first byte. `BREAK` takes several locations, which is what a bisect needs,
 because this gdb stops answering once the target is running.
 
+### What it turned out to be: the instruction fetch
+
+The fault is in fetching instructions from flash, and running the same code
+from RAM avoids it.
+
+That was settled with `solo.c`, one file that links nothing - its own types,
+its own clock setup, its own SCI1, its own bit-banged I2C - so that the
+flash-resident build and the RAM-resident build differ in nothing but where
+the code lives. Built with `-DSOLO_RAMCODE`, which puts its functions in a
+`.ramfunc` section that loads from ROM and runs from RAM, it did 207 reads
+in 41 seconds with no failures. The same source, same compiler, same
+optimisation, fetched from flash, stopped on the first pass.
+
+Before that, what had been eliminated by measurement: the optimiser;
+interrupts (every IER byte zero, and the PSW I bit read back from the
+hardware); all eight exception handlers; a reset; the probe (it happens with
+SW1-1 off, so with the debugger disabled entirely); the pins' drive
+strength; halving ICLK; every library including newlib; and the display. The
+symptom that named it was a trace of one character per I2C step, printed as
+it happened: `pIswP123456789pIswswwswrrrrrrrP123456789rrrr...` - control
+inside `envision_touch_get_raw()` that does not follow the source's flow,
+ending in an `i2crecv` that never leaves. Reading the disassembly shows
+nothing wrong with the code; it is not the code.
+
+It has nothing to do with the software I2C's timing, which is not
+time-critical and may wait as long as it likes.
+
+So the working configuration for the whole port is the same trick applied to
+every function rather than to one file:
+
+    bash tools/patch-ramtext.py generate/linker_script.ld generate/start.S
+    make TARGET=i2craw
+
+`tools/patch-ramtext.py` takes `*(.text.*)` out of the ROM `.text` section -
+output sections are filled in the order the script lists them, so leaving it
+there means `.text` collects every function and the RAM section links empty -
+puts it in a `.ramtext` section whose addresses are in RAM and whose contents
+load from ROM after `.data`, and injects a stack-free copy loop at the top of
+`_PowerON_Reset`. The copy has to be there and not in `main()`, because
+`main()` is one of the functions being moved. `-ffunction-sections`, which
+this project already builds with, is what makes it possible at all: it is
+what puts each C function in its own `.text.<name>` while start.S's code
+stays in plain `.text`, and so in ROM.
+
+One thing about that section's address is worth knowing, because it cost a
+round: at `0x10000` - inside the RAM region the linker script declares, and
+clear of everything - the board produced no output at all, not even the
+banner, while the identical build at `0x2000` runs. The usable RAM stops
+short of what the script claims, so the section sits just above `.bss`.
+
 ## Licence
 
 Apache 2.0, like the rest of the library, with one exception:

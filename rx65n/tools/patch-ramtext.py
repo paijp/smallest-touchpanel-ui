@@ -36,10 +36,17 @@ import sys
 LD = sys.argv[1] if len(sys.argv) > 1 else "generate/linker_script.ld"
 ST = sys.argv[2] if len(sys.argv) > 2 else "generate/start.S"
 
-# 0x10000 is clear of the stacks (0x100..0x500), of .data and .bss (which end
-# below 0x2000 in these programs), and of the GLCDC's framebuffer, which lives
-# in expansion RAM at 0x00800000.
-RAMTEXT_ADDR = "0x10000"
+# 0x2000 is clear of the stacks (0x100..0x500) and of .data and .bss, which end
+# below 0x1600 in these programs, and the framebuffer is elsewhere again - it
+# lives in expansion RAM at 0x00800000.
+#
+# It has to be this low. The first version used 0x10000, which is inside the RAM
+# the linker script declares and well clear of everything, and the board produced
+# no output at all - not the banner, nothing - while the same build at 0x2000 runs.
+# So the usable RAM on this part stops short of what the script claims, and the
+# section is kept just above .bss where it is known to work rather than at a
+# round address that is not.
+RAMTEXT_ADDR = "0x2000"
 
 LD_SECTION = """	.ramtext %s : AT(_mdata + SIZEOF(.data))
 	{
