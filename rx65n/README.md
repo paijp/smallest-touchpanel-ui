@@ -447,8 +447,32 @@ which is not explained. `-O0` with the ROM-resident layout is both faster and
 more reliable, so `tools/patch-ramtext.py` is kept for the record rather than
 needed.
 
-What `--gc-sections` discards that the program needs has not been identified.
-It is a flag this port added; upstream's project does not use it.
+`--gc-sections` is not deleting anything the program needs, and it is worth
+being precise about that, because the flag's name invites the assumption that
+it is. `-Wl,--print-gc-sections` lists everything it removed here, and it is
+eight sections: `.text.INT_Excep_BRK`, `.text.INT_Excep_USBA_USBAR`,
+`.text.gettp`, `.text.gget_stw`, `.text.lcdtp_sendloguw`,
+`.text.seriallog_getc`, `.bss.lcdtp_flip` and `.bss.pressed.1`. The two
+exception handlers are the ones worth checking, since a handler reached only
+through a vector table is the classic thing this flag deletes - but walking
+all 288 entries of `.exvectors`, `.fvectors` and `.rvectors` for those
+addresses finds no reference to any of the four removed functions, and the BRK
+slot points at the same shared dummy handler in both builds. `patch-inthandler.py`
+substitutes its own handlers, so `vects.c`'s originals are dead code either
+way. The rest are functions and variables this program does not call. The
+linker script also `KEEP()`s all three vector tables, which is what would
+otherwise leave them unrooted.
+
+So the flag's only effect here is that `.text` shrinks from 15168 to 14024
+bytes and `.bss` from 172 to 164, and every address after that moves. Which
+means the honest statement is not that `--gc-sections` breaks something but
+that **the fault follows the address layout**, and the same caveat applies to
+the optimisation level, since -O1, -Os and -O2 move everything too. Layout and
+optimisation are not separated yet. What argues against layout being the whole
+story is that the two surviving configurations have quite different layouts -
+one function per section against a single `.text` - and both reached exactly
+212 passes, while all three optimised builds stopped within seconds. So the
+optimisation level is the stronger correlate, not a proven cause.
 
 Upstream's e2 studio project, for comparison, builds its only configuration
 (HardwareDebug) with no optimisation level set - so `-O0` - with
