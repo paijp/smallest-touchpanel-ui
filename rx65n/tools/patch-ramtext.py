@@ -24,6 +24,11 @@ being moved.
 
     bash tools/patch-ramtext.py generate/linker_script.ld generate/start.S
 
+It also has to take *(.text.*) out of the ROM .text section: output sections are
+filled in the order the script lists them, so leaving it there means .text
+collects every function first and the RAM section comes out empty - which is
+exactly what happened the first time.
+
 Needs -ffunction-sections, which this project already builds with. Idempotent.
 """
 import sys
@@ -50,6 +55,10 @@ LD_ANCHOR = """		_ebss = .;
 		_end = .;
 	} > RAM
 """
+
+# .text must stop collecting the per-function sections, or it takes them all
+# before .ramtext is reached and the RAM section links empty.
+LD_STRIP = ("\t\t*(.text)\n\t\t*(.text.*)\n", "\t\t*(.text)\n")
 
 # The copy, in front of everything else in the reset handler. It uses no stack,
 # so it is safe before the stack pointers are even set.
@@ -83,6 +92,14 @@ def patch(path, anchor, insert, what):
     print("%s: patched" % what)
     return True
 
+
+text = open(LD).read()
+if "ramtext" not in text:
+    if LD_STRIP[0] not in text:
+        print("linker script: could not find *(.text.*) in the .text section")
+        sys.exit(1)
+    open(LD, "w").write(text.replace(LD_STRIP[0], LD_STRIP[1], 1))
+    print("linker script: .text no longer collects *(.text.*)")
 
 ok = patch(LD, LD_ANCHOR, LD_SECTION, "linker script")
 ok = patch(ST, ST_ANCHOR, ST_COPY, "start.S") and ok
