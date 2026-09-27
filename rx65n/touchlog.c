@@ -27,6 +27,9 @@
 	  - the live coordinate, the event type and how long the contact has
 	    lasted
 	  - counters: presses, pressing reports, releases, I2C failures
+	  - a loop counter, which is the point: with no finger on the panel
+	    nothing else on this screen changes, so a still picture would
+	    otherwise be indistinguishable from a program that has stopped
 	  - the last few events as a list, newest first
 
 	On the log, one line per event:
@@ -34,6 +37,11 @@
 	      12.484 press     x=241 y=137  n=17
 	      12.516 pressing  x=242 y=139  n=18  held 32ms
 	      12.702 release                n=18  held 218ms dx=8 dy=11
+
+	and one heartbeat line a second, for the same reason as the loop counter:
+	silence in an event log says nothing about whether the program is alive.
+
+	      13.024 alive     loops=814 ok=1620 gaveup=0 points=0 int=1
 
 	Written to be read with open-rfp-monitor, which reads the board's own
 	serial port through the E2 Lite that flashed it:
@@ -90,6 +98,13 @@ static	UW	count_press = 0;
 static	UW	count_pressing = 0;
 static	UW	count_release = 0;
 static	UW	count_fail = 0;
+static	UW	loops = 0;
+
+/*
+	One heartbeat a second at a 16 ms step. Often enough to see a stall
+	quickly, rare enough not to drown the events.
+*/
+#define	HEARTBEAT_LOOPS	64
 
 
 /* --- small formatting helpers, in the port's style --- */
@@ -300,6 +315,32 @@ static	void	draw_history(void)
 }
 
 
+/*
+	The one line that proves the loop is still going round. It also carries
+	the I2C layer's counters, so a panel that has stopped answering looks
+	different from a program that has stopped running: the first keeps
+	counting loops with ok stuck, the second stops both.
+*/
+static	void	log_heartbeat(void)
+{
+	UB	buf[24];
+
+	put_time(buf, now_ms);
+	lcdtp_sendlogs((const char*)buf);
+	lcdtp_sendlogs(" alive     loops=");
+	lcdtp_sendlogdec((W)loops);
+	lcdtp_sendlogs(" ok=");
+	lcdtp_sendlogdec((W)envision_i2c_trace[7]);
+	lcdtp_sendlogs(" gaveup=");
+	lcdtp_sendlogdec((W)envision_i2c_trace[4]);
+	lcdtp_sendlogs(" points=");
+	lcdtp_sendlogdec((W)envision_i2c_trace[5]);
+	lcdtp_sendlogs(" int=");
+	lcdtp_sendlogdec((W)envision_i2c_trace[6]);
+	lcdtp_sendlogs("\r\n");
+}
+
+
 static	void	draw_counters(void)
 {
 	UB	buf[48];
@@ -316,6 +357,12 @@ static	void	draw_counters(void)
 	p = put_dec(p, (W)count_fail, 0, 0);
 	p = put_str(p, " i2c fail");
 	draw_label(4, "", buf, (count_fail)? C_FAIL : C_DIM);
+
+	/* The heartbeat, on screen. This is the only thing here that moves. */
+	p = put_dec(buf, (W)loops, 0, 0);
+	p = put_str(p, " loops   ok ");
+	p = put_dec(p, (W)envision_i2c_trace[7], 0, 0);
+	draw_label(5, "", buf, C_DIM);
 }
 
 
@@ -432,6 +479,10 @@ int	main(void)
 
 		draw_counters();
 		draw_history();
+
+		loops++;
+		if (loops % HEARTBEAT_LOOPS == 0)
+			log_heartbeat();
 
 		/*
 			A fixed step is what makes the times comparable between events.
