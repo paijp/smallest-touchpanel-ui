@@ -19,22 +19,45 @@
 	    envision_clock_init()     yes
 	    seriallog_init()          yes
 	    envision_touch_init()     yes
-	    envision_lcd_init()       NO
-	    init_lcdtp()              NO
+	    envision_lcd_init()       only with -DWITH_GLCDC
+	    init_lcdtp()              NO, ever
+	    any drawing                NO, ever
+
+	-DWITH_GLCDC is the cheap half of the next question. With the display side
+	removed the I2C ran 145 reads without a single failure, and with it in
+	place - GLCDC scanning, framebuffer being written, lcdtp drawing - 33 of 160
+	failed. That leaves two suspects: the controller continuously reading
+	expansion RAM, and the drawing code writing it. Bringing the GLCDC up and
+	drawing nothing separates them in one run. If the reads degrade, it is the
+	scanning; if they stay clean, it is the drawing.
 
 	Nothing here writes to the framebuffer, nothing brings up the GLCDC, and
 	nothing calls into lcdtp's drawing. If it runs and keeps running, the
 	display side is where to look next; if it stops, the I2C side is.
 
-	The backlight is the liveness signal, since there is no screen to write to.
-	It is a plain GPIO that a frozen CPU cannot clear, so:
+	The backlight carries two signals at once, which makes it readable by hand
+	with no terminal at all. It blinks while nothing is touching the panel, and
+	goes solid while a contact is reported:
 
-	  - blinking            running
-	  - stopped, lit        the CPU stopped with the light on
-	  - dark                the MCU was reset or lost power - a different
-	                        fault from a program that stopped, and the one
-	                        that fits a program counter wandering out of the
-	                        code and eventually reaching the reset vector
+	  - blinking            running, no touch
+	  - solid on            running, and the touch is being read
+	  - stuck either way    the program stopped
+	  - dark and staying    the MCU was reset or lost power - a different
+	                        fault from a program that stopped, and the one that
+	                        fits a program counter wandering out of the code
+	                        and eventually reaching the reset vector
+
+	So touching the panel is a complete test: the light should react. It is a
+	plain GPIO that a frozen CPU cannot clear, which is what makes the third and
+	fourth cases distinguishable.
+
+	Two canaries watch for the memory corruption the trace has been implying.
+	The impossible readings - gave up at the write address, with nak clear and
+	the step counter mid-receive - cannot come from one execution of
+	touch_read(), so something is writing memory it does not own. One canary
+	sits below the user stack's limit, where an overflow would land; the other
+	just past the end of .bss, where an overrun would. Each is checked every
+	pass and reported the moment it changes.
 
 	The interrupt state goes on the log as well. Nothing in this port enables
 	an interrupt - the GLCDC's requests are switched off, ICU GROUPAL1 is
@@ -50,8 +73,21 @@
 #include	"seriallog.h"
 
 
-/* From the linker script, for reporting where .bss ends. */
+/* From the linker script: .bss's end, and the stacks' limits. */
 extern	char	ebss[];
+extern	char	ustack[];
+extern	char	istack[];
+
+#define	CANARY		0x5a5aa5a5UL
+
+/*
+	Below the user stack's limit: the user stack grows down from _ustack toward
+	_istack, so a word at _istack is the first thing an overflow reaches.
+*/
+#define	CANARY_STACK	((volatile UW*)((UW)istack))
+
+/* Just past .bss, where an overrun off the end of an object would land. */
+#define	CANARY_BSS	((volatile UW*)((UW)ebss))
 
 #define	PERIOD_MS	200
 
@@ -130,6 +166,9 @@ int	main(void)
 		Then set it to NULL regardless, so the rest of the run cannot go that
 		way whatever it held.
 	*/
+	*CANARY_STACK = CANARY;
+	*CANARY_BSS = CANARY;
+
 	lcdtp_sendlogs("polltask before = ");
 	lcdtp_sendloguw((UW)lcdtp_polltask);
 	lcdtp_sendlogs("  bss ");
@@ -144,13 +183,27 @@ int	main(void)
 	envision_touch_init();
 	log_interrupt_state("after touch init");
 
+#ifdef	WITH_GLCDC
+	/*
+		The display controller, scanning the framebuffer - and nothing else.
+		init_lcdtp() is deliberately not called and nothing is ever drawn, so
+		the only new thing in the run is the GLCDC reading expansion RAM.
+	*/
+	envision_lcd_init();
+	lcdtp_sendlogs("glcdc up, drawing nothing\r\n");
+#endif
+
 	for (;;) {
 		x = -1;
 		y = -1;
 		touched = envision_touch_get_raw(&x, &y);
 		pass++;
 
-		PORT6.PODR.BIT.B6 = ((pass / BLINK_PASSES) & 1)? 1 : 0;
+		/*
+			Solid while a contact is reported, blinking otherwise, so the
+			panel can be tested by hand with nothing else attached.
+		*/
+		PORT6.PODR.BIT.B6 = ((touched))? 1 : (((pass / BLINK_PASSES) & 1)? 1 : 0);
 
 		lcdtp_sendlogdec((W)(pass * PERIOD_MS / 1000));
 		lcdtp_sendlogs(".");
@@ -168,6 +221,17 @@ int	main(void)
 		log_dec(" drops=", seriallog_dropped());
 		lcdtp_sendlogs(" plt=");
 		lcdtp_sendloguw((UW)lcdtp_polltask);
+
+		if (*CANARY_STACK != CANARY) {
+			lcdtp_sendlogs(" STACK CANARY ");
+			lcdtp_sendloguw(*CANARY_STACK);
+			*CANARY_STACK = CANARY;
+		}
+		if (*CANARY_BSS != CANARY) {
+			lcdtp_sendlogs(" BSS CANARY ");
+			lcdtp_sendloguw(*CANARY_BSS);
+			*CANARY_BSS = CANARY;
+		}
 
 		lcdtp_sendlogs(" | ");
 		for (i = 0; i < 7; i++) {
