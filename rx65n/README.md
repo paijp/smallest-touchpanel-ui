@@ -8,7 +8,9 @@ lcdtp.c   lcdtp.h    the port: drawing, touch, timing            Apache 2.0
 basic.h              types                                       Apache 2.0
 tplib.c   tplib.h    the GUI library, unchanged from the other ports
 sample1.c            the same sample the x11 and pic32mx ports build
-debuglog.c debuglog.h   debug log sink                            Apache 2.0
+debuglog.c debuglog.h   debug log sink: a ring buffer for the debugger  Apache 2.0
+seriallog.c .h        debug log sink: SCI1, read through the E2 Lite  Apache 2.0
+touchlog.c            touch response on the LCD and on the log        Apache 2.0
 envision_hw.c .h     board bring-up: clock, GLCDC, touch I2C      MIT
 tools/readlog.py     host side of the debug log
 ```
@@ -105,12 +107,40 @@ would instead leave a button stuck down.
 
 ## Debug logging
 
-The Envision Kit has no UART the host can reach. Its E2 Lite presents a
-single vendor-specific USB interface with two bulk endpoints and nothing else
-- no CDC, so no `/dev/ttyACM*` to print to. The Pmod connector does carry
-SCI9, but using it means adding a USB-serial adapter.
+There are three sinks now, and `lcdtp_sendlogc()` writes to all of them,
+because they fail in different directions. Reach for the serial one first.
 
-What the board does have is Renesas' **RRM/DMM** - real-time RAM monitoring -
+### Serial, out of the same cable that flashed the board
+
+`seriallog.c`. The premise the rest of this section was written on - that the
+board has no UART the host can reach - turns out to be wrong. The E2 Lite is
+wired to the MCU's boot-mode SCI, which on this part is SCI1 with TXD1 on P26
+and RXD1 on P30, and the USB command that carries those bytes goes on working
+after boot mode has ended. So user code that drives SCI1 is read by whatever
+is holding the probe, with no adapter and no debugger.
+
+It needs a host that talks to the E2 Lite directly rather than through the
+vendor tools. [paijp/open-rfp-monitor](https://github.com/paijp/open-rfp-monitor)
+does that, and flashes the board over the same link:
+
+```bash
+rxflash.py write touchlog.mot --log
+```
+
+Which pin it is was found by driving P26 and PF0 in turn with different
+messages and seeing which one arrived; only P26 ever did. The rate is set by
+`SERIALLOG_BAUD`, and only rates the probe can itself produce are useful,
+since its UART divides a 3 MHz reference. 115200 is the default and comes out
+1.5% under what the probe makes of it, comfortably inside the 4% either way
+it was measured to tolerate; `-DSERIALLOG_BAUD=125000` is exact on both sides
+if a run ever looks marginal.
+
+The cost is that transmission blocks: a log call inside a tight loop paces
+that loop at the baud rate. Keep it out of interrupt handlers.
+
+### RRM/DMM, through the debugger
+
+What the board also has is Renesas' **RRM/DMM** - real-time RAM monitoring -
 which `e2-server-gdb` exposes with `-uAllowRRMDMM=1`. That lets the host read
 target RAM *without halting the CPU*, which turns an ordinary ring buffer
 into a live console over the USB cable that is already attached.
@@ -118,6 +148,10 @@ into a live console over the USB cable that is already attached.
 The alternative, writing to data flash and halting to dump it with
 `rfp-cli -rv`, also works and needs no debugger - but it stops the program,
 wears the flash, and is far too slow for anything chatty.
+
+Everything below this line is that path. It still works, and the ring buffer
+is still the only sink that survives a freeze, so it is worth keeping. It is
+no longer the only way to see a line of output.
 
 ```bash
 # where the emulator is plugged in

@@ -9,6 +9,7 @@
 
 #include	"debuglog.h"
 #include	"dbgcon.h"
+#include	"seriallog.h"
 
 
 /*
@@ -92,6 +93,12 @@ volatile struct debuglog_struct	debuglog = {
 	are recoverable after a freeze and the run up to it was watchable as it
 	happened.
 
+	And, since seriallog.c exists, the board's own serial port as well. That
+	one is both live and unbounded, needs no debugger, and is the only sink
+	here whose host side is not the vendor's - so it is the one to reach for
+	first. It stays quiet until seriallog_init() has run, which is what keeps
+	this call safe in the programs that never set it up.
+
 	The console was briefly taken out of here, on a measurement that said
 	touching its registers faulted. That measurement was made on a build
 	whose .bss started at address 0 and was about a null pointer, not about
@@ -108,4 +115,5 @@ void	lcdtp_sendlogc(W c)
 	debuglog.wr = w + 1;
 
 	dbgcon_putc(c);
+	seriallog_putc(c);
 }
