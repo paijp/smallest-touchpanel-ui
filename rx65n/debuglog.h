@@ -42,30 +42,20 @@
 
 #include	"basic.h"
 
-/* Power of two: the writer masks with (size - 1) instead of dividing. */
-#define	DEBUGLOG_SIZE	4096
-
 /*
-	Laid out so a reader that samples it in one pass can tell whether it
-	sampled a torn state.
+	The ring buffer this header used to declare is gone.
 
-	`magic` lets the reader confirm it is looking at the buffer at all
-	(a stale .elf, or a target that never booted, both show up as garbage).
+	It existed because there seemed to be nowhere for a log character to go
+	on this board: 4 KB of RAM, written by the target and read back by a
+	debugger with the target stopped. It could only be read through gdb's
+	RRM/DMM, which is the path that would not hold still, and it held minutes
+	at best. seriallog.c made it redundant - SCI1 goes out of the same cable
+	that programmed the board, live, unbounded, and with no debugger involved
+	at all - and keeping a second sink that nothing read meant carrying 4 KB
+	of .data and a write on every character for nothing.
 
-	`wr` counts bytes ever written and never wraps, so the reader can
-	compute how far behind it is and detect that the writer lapped it -
-	an index that wrapped would make an overrun look like no progress.
+	What is left here is dbgcon_putc(), the E2 debug console, which is off
+	unless dbgcon_enable is set.
 */
-struct	debuglog_struct {
-	UW	magic;			/* DEBUGLOG_MAGIC once initialised */
-	UW	size;			/* == DEBUGLOG_SIZE, so the reader need not assume */
-	UW	wr;			/* total bytes written, free-running */
-	UW	pad;			/* keeps buf 16-byte aligned */
-	UB	buf[DEBUGLOG_SIZE];
-};
-
-#define	DEBUGLOG_MAGIC	0x4C475044	/* "DPGL" */
-
-extern	volatile struct debuglog_struct	debuglog;
 
 #endif

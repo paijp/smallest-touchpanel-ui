@@ -59,45 +59,23 @@ void	dbgcon_putc(W c)
 
 
 /*
-	Not in .bss: the reader wants to attach to a target that is already
-	running and find a usable buffer, and .bss is zeroed by the startup code
-	at every reset. Giving magic and size initialisers puts the whole thing
-	in .data, so the values are already correct before main() runs and a
-	reader attaching mid-run never sees a half-set-up header.
-*/
-volatile struct debuglog_struct	debuglog = {
-	DEBUGLOG_MAGIC,
-	DEBUGLOG_SIZE,
-	0,
-	0,
-	{0}
-};
-
-
-/*
 	The only platform-specific piece of the lcdtp log interface - everything
 	from lcdtp_sendlogs() up is shared with the other ports and builds on
 	this one byte at a time.
 
-	Order matters. The byte lands before wr advertises it, so a reader that
-	catches this mid-call sees the old count and simply comes back for the
-	byte next time, rather than reading a slot the writer has not filled in
-	yet. There is no lock and none is needed: one writer on the target, one
-	reader on the host, and the reader never writes.
+	Two sinks, and they fail in opposite directions. The console streams live
+	and unboundedly but keeps nothing, needs a reset to switch on, and drops
+	everything written before the host opened the socket. The board's own
+	serial port is live and unbounded too, needs no debugger, and is the only
+	sink here whose host side is not the vendor's - so it is the one to reach
+	for first. It stays quiet until seriallog_init() has run, which is what
+	keeps this call safe in the programs that never set it up.
 
-	Both sinks, because they fail in opposite directions. The ring buffer
-	keeps history but can only be read with the target stopped, and it holds
-	minutes at best. The console streams live and unboundedly but keeps
-	nothing, needs a reset to switch on, and drops everything written before
-	the host opened the socket. Writing to both means the last few minutes
-	are recoverable after a freeze and the run up to it was watchable as it
-	happened.
-
-	And, since seriallog.c exists, the board's own serial port as well. That
-	one is both live and unbounded, needs no debugger, and is the only sink
-	here whose host side is not the vendor's - so it is the one to reach for
-	first. It stays quiet until seriallog_init() has run, which is what keeps
-	this call safe in the programs that never set it up.
+	There used to be a third: a 4 KB ring buffer in RAM, read back through
+	gdb's RRM/DMM with the target stopped. That was the path that would not
+	hold still, and once the serial port worked nothing read the buffer any
+	more, so it has gone rather than cost 4 KB of .data and a write per
+	character for nobody.
 
 	The console was briefly taken out of here, on a measurement that said
 	touching its registers faulted. That measurement was made on a build
@@ -108,12 +86,6 @@ volatile struct debuglog_struct	debuglog = {
 */
 void	lcdtp_sendlogc(W c)
 {
-	UW	w;
-
-	w = debuglog.wr;
-	debuglog.buf[w & (DEBUGLOG_SIZE - 1)] = (UB)c;
-	debuglog.wr = w + 1;
-
 	dbgcon_putc(c);
 	seriallog_putc(c);
 }
