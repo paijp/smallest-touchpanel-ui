@@ -470,12 +470,70 @@ there are none - 277 ms is also the maximum, not just the median. Two runs
 each produced a single 538-540 ms gap, which is exactly two periods and so
 reads as one line lost rather than a stall.
 
-**So the honest summary** is that every build of this port stops eventually,
-that optimised builds stop within seconds and unoptimised ones usually last
-minutes, and that nothing found so far explains why. Since the failure is
-intermittent, the next thing this needs is not another single-run experiment
-but repetition: the same image, many captures, counting survivals, so that a
-change can be told from luck.
+**Survival rates, measured with `tools/rep.sh`** - one image programmed once,
+then reset and captured repeatedly, eight runs of twelve seconds each:
+
+| build | survived |
+|----|----|
+| every source at -O0 | **8 of 8** |
+| every source at -O2 | 1 of 8 |
+| only `envision_hw.c` at -O2 | 0 of 8 |
+| only `lcdtp.c` at -O2 | 0 of 8 |
+| only `i2craw.c` at -O2 | 0 of 8 |
+| only `seriallog.c` and `debuglog.c` at -O2 | 2 of 8 |
+| only `hwinit.c`, `inthandler.c`, `vects.c` at -O2 | 0 of 8 |
+
+The last row is the one that refuses to fit. `HardwareSetup()` in `hwinit.c` is
+an empty function, `vects.c` is const tables, and `inthandler.c`'s handlers are
+never entered - every IER byte is zero and the log prints them to prove it. So
+compiling files that contain almost no code at -O2 is as fatal as compiling the
+I2C, which is not what "the optimiser generates bad code for this driver" would
+predict. What the table supports is narrower: each image has a survival rate,
+and all-at-O0 is the only one measured with a high one.
+
+**Where control is lost.** `-DI2C_MARK` with `i2cmark.c` emits one character per
+step of every transaction, and it puts the stop in one place. Four runs of the
+same failing build:
+
+    run 1,2,4:  pIswP123456789 pIswswwswrrrrrrrP123456789 <silence>
+    run 3:      pIswP123456789 pIswP123456789+init: touch
+                pIswswwswrrrrrrrP123456789 <silence>
+
+Seven `r`s, the stop condition, and all nine steps of `i2cstop` arrive. The
+transaction completed. What follows it in `touch_read()` is a handful of
+assignments to `envision_i2c_trace[]` and `return 1` - straight-line code with no
+loop in it, which cannot hang. In a no-display build the stop lands after the
+`w` of a probe's address frame, again with only `i2c_swap = !i2c_swap` and a loop
+back-edge between there and the next mark. So this is control leaving the code,
+not code waiting for something.
+
+**And in one failure mode the program is not stopped at all.** A log that ends
+in an endless run of `U` looks like garbage until the status word beside each
+read is printed, which `probe_uartraw.py` in the rxflash repo now does. The
+answer: `status=00000000`, 256 bytes of 0x55, every 22 ms, which is 115200
+saturated.
+
+    0.432 status=00000000 filled=True  256 bytes  55*242 70*1 49*1 73*1  b'pIswP123456789UUUUUUUUUU'
+    0.454 status=00000000 filled=True  256 bytes  55*256
+
+The MCU is running and writing 0x55 to TDR as fast as the transmitter takes it.
+Nothing in this port ever sends that byte. So there are two failure modes, not
+one: a silent stop, and this. The 0x55 flood also predates the mark hook, so it
+is not the hook's doing.
+
+**Flash is intact afterwards.** `rxflash.py verify` compares flash against the
+image without writing, and after each stop all 19200 bytes and the fixed vector
+table matched. A program corrupting its own code through the flash control unit
+would have looked exactly like this, and does not.
+
+**So the honest summary**: every build of this port fails eventually, optimised
+ones within seconds and unoptimised ones rarely within a minute; when it fails,
+control has left the source's flow right after a completed I2C step, and the CPU
+is sometimes still running and flooding the UART. Nothing found so far explains
+it. What is now in place is the means to tell a change from luck - `rep.sh` for
+rates, `stamp.py` for whether a run was slow or short, `i2cmark.c` for where, and
+`verify` and `probe_uartraw.py` for two of the explanations that turned out to be
+wrong.
 
 Ruled out earlier, each by measurement: interrupts (every IER byte zero, and
 the PSW I bit read back from the hardware); all eight exception handlers; a
