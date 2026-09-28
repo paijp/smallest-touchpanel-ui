@@ -19,8 +19,15 @@
 */
 W	dbgcon_dropped = 0;
 
-/* Opt-in; see dbgcon.h for why it is not on by default. */
-W	dbgcon_enable = 0;
+/*
+	Opt-in; see dbgcon.h for why it is not on by default. -DDBGCON_ENABLE=1
+	switches it on from the start, for a program that does not do it
+	itself - sample1, whose log is tplib's #PRESS and #RET lines.
+*/
+#ifndef	DBGCON_ENABLE
+#define	DBGCON_ENABLE	0
+#endif
+W	dbgcon_enable = DBGCON_ENABLE;
 
 
 /*
