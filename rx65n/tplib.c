@@ -437,22 +437,35 @@ W	tplib_setupflip(void *message)
 W	tplib_proc_tenkey(struct tplib_parts_struct *p, UW cmd)
 {
 	static	W	val;
+	/*
+		Laid out for a 240x320 panel, where the bottom row - cancel, 0 and
+		OK - sat at y 256 and ended at 304. On the Envision Kit's 480x272
+		that row was entirely off the screen: cancel and OK started at 272,
+		which is the first line past the bottom.
+
+		Only the vertical steps changed, and the buttons keep their sizes.
+		The first row is still at 16; the three digit rows now step by 38
+		and then 54 rather than 48 and 64, so they sit at 54, 108 and 162;
+		and the bottom row moves from 256 to 216, ending at 264 with eight
+		pixels to spare. cancel and OK keep their +16, which is what makes
+		them sit flush with the bottom of the taller 0 beside them.
+	*/
 	static	struct	tplib_parts_struct	parts[] = {
 		{tplib_parts_fill, 0, 0, LCD_W, LCD_H, 0x0000, NULL, NULL, NULL, 0}, 
 		{tplib_parts_dec, 16, 16, 112, 24, 0, &val, NULL, NULL, 0}, 
 		{tplib_parts_button, TPLIB_REL + 32, TPLIB_REL, 64, 32, -1, NULL, NULL, "<-", 0}, 
-		{tplib_parts_button, 16, TPLIB_REL + 48, 64, 48, 7, NULL, NULL, "7", 0}, 
+		{tplib_parts_button, 16, TPLIB_REL + 38, 64, 48, 7, NULL, NULL, "7", 0}, 
 		{tplib_parts_button, TPLIB_REL + 8, TPLIB_REL, 64, 48, 8, NULL, NULL, "8", 0}, 
 		{tplib_parts_button, TPLIB_REL + 8, TPLIB_REL, 64, 48, 9, NULL, NULL, "9", 0}, 
-		{tplib_parts_button, 16, TPLIB_REL + 64, 64, 48, 4, NULL, NULL, "4", 0}, 
+		{tplib_parts_button, 16, TPLIB_REL + 54, 64, 48, 4, NULL, NULL, "4", 0}, 
 		{tplib_parts_button, TPLIB_REL + 8, TPLIB_REL, 64, 48, 5, NULL, NULL, "5", 0}, 
 		{tplib_parts_button, TPLIB_REL + 8, TPLIB_REL, 64, 48, 6, NULL, NULL, "6", 0}, 
-		{tplib_parts_button, 16, TPLIB_REL + 64, 64, 48, 1, NULL, NULL, "1", 0}, 
+		{tplib_parts_button, 16, TPLIB_REL + 54, 64, 48, 1, NULL, NULL, "1", 0}, 
 		{tplib_parts_button, TPLIB_REL + 8, TPLIB_REL, 64, 48, 2, NULL, NULL, "2", 0}, 
 		{tplib_parts_button, TPLIB_REL + 8, TPLIB_REL, 64, 48, 3, NULL, NULL, "3", 0}, 
-		{tplib_parts_button, 16, 256 + 16, 64, 32, -2, NULL, NULL, "cancel", 0}, 
-		{tplib_parts_button, TPLIB_REL + 8, 256, 64, 48, 0, NULL, NULL, "0", 0}, 
-		{tplib_parts_button, TPLIB_REL + 8, 256 + 16, 64, 32, -3, NULL, NULL, "OK", 0}, 
+		{tplib_parts_button, 16, 216 + 16, 64, 32, -2, NULL, NULL, "cancel", 0}, 
+		{tplib_parts_button, TPLIB_REL + 8, 216, 64, 48, 0, NULL, NULL, "0", 0}, 
+		{tplib_parts_button, TPLIB_REL + 8, 216 + 16, 64, 32, -3, NULL, NULL, "OK", 0}, 
 		{NULL}
 	};
 	
