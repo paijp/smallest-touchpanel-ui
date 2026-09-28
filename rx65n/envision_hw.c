@@ -95,9 +95,6 @@ void	envision_clock_init(void)
 	/* unlock the clock control registers */
 	SYSTEM.PRCR.WORD = 0xa50b;
 
-	/* resonator, not an external clock */
-	SYSTEM.MOFCR.BIT.MOSEL = 0;
-
 	/* the HOCO and the sub-clock are unused, so stop and unpower them */
 	SYSTEM.HOCOCR.BIT.HCSTP = 1;
 	SYSTEM.HOCOPCR.BIT.HOCOPCNT = 1;
@@ -106,8 +103,11 @@ void	envision_clock_init(void)
 	/* no USB clock */
 	SYSTEM.SCKCR2.WORD = 0x0001;
 
-	/* drive level for a 12MHz input, and its stabilisation wait */
-	SYSTEM.MOFCR.BIT.MODRV2 = 2;
+	/*
+		Resonator (MOSEL=0), drive level for a 12MHz input (MODRV2=2), in
+		one write for the same reason as SCKCR below.
+	*/
+	SYSTEM.MOFCR.BYTE = 0x20;
 	SYSTEM.MOSCWTCR.BYTE = 0x53;
 	SYSTEM.MOSCCR.BIT.MOSTP = 0;
 
@@ -149,44 +149,37 @@ void	envision_clock_init(void)
 	while (SYSTEM.ROMWT.BIT.ROMWT != 2)
 		__asm__ __volatile__ ("nop");
 
-	SYSTEM.PLLCR.BIT.PLIDIV = 0;		/* /1 */
-	SYSTEM.PLLCR.BIT.STC = 39;		/* x20 */
+	SYSTEM.PLLCR.WORD = 0x2700;		/* STC x20, main clock, /1 */
 	SYSTEM.PLLCR2.BIT.PLLEN = 0;		/* run */
 	while (SYSTEM.OSCOVFSR.BIT.PLOVF == 0)
 		__asm__ __volatile__ ("nop");
 
-#ifdef	ENVISION_ICLK_60
 	/*
-		For one experiment: the processor at half speed.
+		SCKCR in one write, never field by field.
 
-		The fault this port is chasing looks like instruction fetch going
-		wrong - undefined instructions and PCs one byte into a valid
-		instruction - and whether it appears depends on nothing more than
-		how the code is laid out: a build with the console compiled in but
-		never switched on faults, the same program without it does not.
-		That pattern fits a fetch with too little margin, from the clock,
-		the supply, or the flash wait states. Halving ICLK widens every one
-		of those margins at once, so if the fault survives this, all three
-		are ruled out together.
+		Each .BIT write is a read-modify-write of the whole register, and
+		a write to SCKCR is not visible to the next read straight away.
+		Written a field at a time, the second write read back the value
+		from before the first, and ICK=1 was lost: ICK stayed 0, ICLK ran
+		at the full 240MHz - twice its rating - and two ROM wait states
+		were nowhere near enough. That is the undefined instructions and
+		the registers that never took the value just loaded, all through
+		this port's history.
 
-		PCLKA comes down with it because the peripheral clocks must not
-		run faster than ICLK. The panel's dot clock is taken from the PLL
-		directly, not from either, so the display is unaffected; the delay
-		loops calibrated for 120MHz simply run twice as long.
+		The value is also read back until it has taken, as ROMWT is.
+
+		  FCK /4 60MHz, ICK /2 120MHz, PSTOP1 PSTOP0, BCK /2,
+		  PCKA /2 120MHz, PCKB PCKC PCKD /4 60MHz
 	*/
-	SYSTEM.SCKCR.BIT.ICK = 2;		/* ICLK   60MHz */
-	SYSTEM.SCKCR.BIT.FCK = 2;		/* FCLK   60MHz */
-	SYSTEM.SCKCR.BIT.PCKA = 2;		/* PCLKA  60MHz */
+#ifdef	ENVISION_ICLK_60
+	/* the processor at half speed, for comparison: ICK FCK PCKA BCK /4 */
+#define	ENVISION_SCKCR	0x22c22222UL
 #else
-	SYSTEM.SCKCR.BIT.ICK = 1;		/* ICLK  120MHz */
-	SYSTEM.SCKCR.BIT.FCK = 2;		/* FCLK   60MHz */
-	SYSTEM.SCKCR.BIT.PCKA = 1;		/* PCLKA 120MHz */
+#define	ENVISION_SCKCR	0x21c11222UL
 #endif
-	SYSTEM.SCKCR.BIT.PCKB = 2;		/* PCLKB  60MHz */
-	SYSTEM.SCKCR.BIT.PCKC = 2;		/* PCLKC  60MHz */
-	SYSTEM.SCKCR.BIT.PCKD = 2;		/* PCLKD  60MHz */
-	SYSTEM.SCKCR.BIT.PSTOP0 = 1;		/* SDCLK unused */
-	SYSTEM.SCKCR.BIT.PSTOP1 = 1;		/* BCLK  unused */
+	SYSTEM.SCKCR.LONG = ENVISION_SCKCR;
+	while (SYSTEM.SCKCR.LONG != ENVISION_SCKCR)
+		__asm__ __volatile__ ("nop");
 
 	SYSTEM.SCKCR3.BIT.CKSEL = 4;		/* switch to the PLL */
 	SYSTEM.LOCOCR.BYTE = 1;			/* LOCO no longer needed */
