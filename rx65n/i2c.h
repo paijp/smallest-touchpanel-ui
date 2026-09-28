@@ -189,13 +189,15 @@ static	void	i2cscl_high(void)
 
 	High drive buys nothing on an open-drain bus - the pull-ups set the
 	rising edge and a normal-drive pin sinks far more than the bus needs -
-	and it makes every falling edge a bigger, faster current step. It is a
-	switch for one experiment: the fault this port is chasing is an
-	instruction fetched wrong, at a valid address holding a valid
-	instruction, in the delay loop straight after a pin change, only when
-	the bus is being driven every pass, and unchanged at half the clock.
-	That is the shape of a supply disturbance, and the pins are the
-	obvious thing disturbing it.
+	and it makes every falling edge a bigger, faster current step. It was a
+	switch for one experiment, on the theory that the fault this port was
+	chasing was a supply disturbance with the pins doing the disturbing.
+
+	It was not. The fault was SCKCR written one field at a time, leaving
+	ICLK at 240 MHz against a 120 MHz maximum; see envision_hw.c. The drive
+	setting made no difference to it and this option changed nothing, so it
+	is left at the high drive the reference uses and is kept only because
+	it is a real choice about the bus rather than about that fault.
 */
 #ifndef	I2C_DSCR
 #define	I2C_DSCR	1

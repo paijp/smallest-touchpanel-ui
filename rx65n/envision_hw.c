@@ -150,28 +150,23 @@ void	envision_clock_init(void)
 		__asm__ __volatile__ ("nop");
 
 	/*
-		ROM wait states have to go up before the clock does - and the
-		write has to have taken effect before the clock does, which is
-		not the same thing and is the part that was missing.
+		Two wait states, which is what the code flash needs above 100 MHz,
+		set before the clock goes up - and read back until it reads 2,
+		which is what the Renesas BSP does.
 
-		Above 100MHz the code flash needs two wait states. This write is
-		not applied the instant it retires, so raising ICLK to 120MHz
-		straight afterwards can happen while the flash is still being
-		read with too few waits. What comes back then is not an error,
-		it is wrong data - and wrong data fetched as code is a garbage
-		instruction: an undefined instruction, or a 0x00, which is BRK,
-		or a branch to nowhere.
+		This comment used to argue that the missing read-back was the
+		fault this port was chasing. It was not. ROMWT was being set to 2
+		all along; what was wrong was the clock it was set for. Writing
+		SCKCR one field at a time left ICK at 0, so ICLK ran at 240 MHz
+		instead of 120, and two wait states are not enough at twice the
+		speed - see the SCKCR write below, which is where the fault
+		actually was and how it was measured.
 
-		That is the shape of the fault this port has been chasing.
-		Intermittent, never the same address twice, wild PCs in
-		unimplemented space, worse the more the program does, and
-		present in the diagnostic that was thought to be clean as well
-		as the one that was not. Reading the register back until it
-		reads 2 is what the Renesas BSP does and what was missing here.
-
-		Whether it is *the* cause is not established - it is a
-		documented requirement that was not met and a plausible fit for
-		the symptom. The board decides that, not this comment.
+		The read-back stays. A write to a clock control register does not
+		take effect the instant it retires, and confirming this one before
+		raising ICLK costs nothing. It is discipline, not a fix, and it is
+		worth saying so plainly, because a comment that claims to have
+		found the bug is worse than no comment when it has not.
 	*/
 	SYSTEM.ROMWT.BIT.ROMWT = 2;
 	while (SYSTEM.ROMWT.BIT.ROMWT != 2)

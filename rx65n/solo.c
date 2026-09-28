@@ -25,42 +25,37 @@
 	two characters i2cprobe() prints on the way out. That is not a hang in a
 	loop; it is control arriving somewhere it was never sent.
 
-	And this port's own notes say the same thing from the other side: undefined
-	instructions, PCs one byte into a valid instruction, and whether it happens
-	at all depending on nothing but how the code is laid out - a build with the
-	debug console compiled in but never switched on faults, the same program
-	without it does not.
+	And this port's own notes said the same thing from the other side:
+	undefined instructions, and PCs one byte into a valid instruction.
 
-	Everything that could be ruled out by an experiment has been. Not the
-	optimiser (-O0 fails too). Not interrupts (every ICU enable byte reads 00,
-	the touch INT line is a polled input). Not a CPU exception, bus error, RAM
-	error or NMI (all eight handlers instrumented, never fired). Not a reset
-	(the MCU does not answer the boot-mode sync afterwards, so it is still in
-	user code). Not the probe (it happens with SW1-1 off, the emulator
-	physically disconnected). Not the pins' drive strength (-DI2C_DSCR=0). Not
-	the clock, supply or flash-wait margins (-DENVISION_ICLK_60 halves ICLK and
-	widens all three at once). Not the display (this fails with none brought
-	up), though the display makes it far more frequent.
-
-	What is left is the code itself and how it is built, and that is what this
-	file is for. If it runs, the fault is in what was left out, and the
-	difference is small enough to bisect. If it fails, the whole program is a
-	few hundred lines that can be disassembled and read end to end - which is
-	the next step either way, and impossible while the build pulls in four
-	other objects and a libc.
+	All of that was the symptom of one thing, found later and written up in
+	envision_hw.c: SCKCR set one field at a time leaves ICK at 0, so ICLK ran
+	at 240 MHz against a 120 MHz maximum and the code flash was read at twice
+	the speed its wait states were set for. Everything this file's notes used
+	to list as ruled out really was ruled out - the optimiser, interrupts, the
+	exception handlers, the probe, the pins, the libraries, the display - and
+	the one thing left was never on the list, because it was in the clock setup
+	that every build shared, this one included.
 
 	The backlight is the liveness signal: solid while a contact is reported,
 	blinking otherwise, dark only if the MCU was reset or lost power.
 
 	-DSOLO_RAMCODE puts every function in RAM and runs it from there.
 
-	This is the one experiment left that can be decided. The port's notes say
-	the fault looks like an instruction fetched wrong at a valid address
-	holding a valid instruction, and the disassembly agrees: the code is
-	correct, every loop is bounded, and it still leaves the source's control
-	flow. If the fetch itself is what goes wrong, fetching from RAM instead of
-	flash should change the answer - and if it does not, the flash read path is
-	ruled out too.
+	-DSOLO_RAMCODE was the experiment that seemed to decide the port's fault:
+	this program stopped on its first pass out of flash and did 207 reads from
+	RAM without one failure, which read as the instruction fetch being the
+	problem.
+
+	It was the right measurement and the wrong conclusion. This file had the
+	same bug as the port: it set SCKCR one field at a time, which leaves ICK at
+	0 and runs ICLK at 240 MHz against a 120 MHz maximum, so the flash could
+	not be read at the speed it was being read at. RAM has no wait states,
+	which is the whole of why the RAM build survived. Fixed here as it is in
+	envision_hw.c, where the measurement that settled it is written up; the
+	flash build has no reason to fail now, and -DSOLO_RAMCODE is kept because
+	a single file that links nothing is still the cleanest place to test an
+	idea about this board.
 
 	It needs the linker script patched to add a .ramfunc section; see
 	tools/patch-ramfunc.py. main() stays in ROM, copies the section, and only
@@ -257,14 +252,15 @@ static	void	clock_init(void)
 	while (SYSTEM.OSCOVFSR.BIT.PLOVF == 0)
 		;
 
-	SYSTEM.SCKCR.BIT.ICK = 1;		/* ICLK  120 MHz */
-	SYSTEM.SCKCR.BIT.FCK = 2;		/* FCLK   60 MHz */
-	SYSTEM.SCKCR.BIT.PCKA = 1;		/* PCLKA 120 MHz */
-	SYSTEM.SCKCR.BIT.PCKB = 2;		/* PCLKB  60 MHz */
-	SYSTEM.SCKCR.BIT.PCKC = 2;
-	SYSTEM.SCKCR.BIT.PCKD = 2;
-	SYSTEM.SCKCR.BIT.PSTOP0 = 1;
-	SYSTEM.SCKCR.BIT.PSTOP1 = 1;
+	/*
+		One 32-bit write: ICK /2 = 120, FCK /4 = 60, PCKA /2 = 120,
+		PCKB, PCKC and PCKD /4 = 60, BCK /2, PSTOP0 and PSTOP1 set.
+
+		This file used to set those fields one at a time, which leaves ICK
+		at 0 and ICLK at 240 MHz - and that is what this file's famous
+		measurement was actually measuring. See the header comment.
+	*/
+	SYSTEM.SCKCR.LONG = 0x21C11222UL;
 
 	SYSTEM.SCKCR3.BIT.CKSEL = 4;		/* switch to the PLL */
 

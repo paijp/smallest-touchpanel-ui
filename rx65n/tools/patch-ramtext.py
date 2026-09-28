@@ -1,26 +1,20 @@
 #!/usr/bin/env python3
 """Run all C code out of RAM, by patching the fetched linker script and start.S.
 
-Kept for the record; not the fix. The port's own RAM builds stop like every
-other build - 17, 28 and 41 passes of i2craw, at the same 276-277 ms period as
-a healthy run, so they stop rather than run slowly. Building at -O0 and leaving
-the code in ROM lasts far longer. So what follows is the reasoning that led
-here; solo.c's result was real, but it does not generalise to the port, and
-running from RAM is not established as avoiding anything. See the README.
+Kept for the record; not needed. The fault it was built to work around was
+SCKCR written one field at a time, which left ICK at 0 and ran ICLK at 240 MHz
+against this part's 120 MHz maximum, so the code flash was being read at twice
+the speed its wait states were set for and instruction fetch came back wrong.
+envision_hw.c has the measurement and the fix.
 
-Why: on this board a program fetched from flash leaves the control flow the
-source describes - the disassembly is correct and every loop in it is bounded,
-and it still ends up somewhere it was never sent. The same program, same
-compiler, same optimisation, with its functions copied to RAM and run from
-there, ran 207 reads without a single failure where the flash-resident build
-stopped on the first. Nothing else accounted for it: not the optimiser, not
-interrupts, not any of the eight exception handlers, not a reset, not the probe
-(it happens with SW1-1 off), not the pins' drive strength, not halving ICLK, not
-the libraries, not the display. See solo.c for the run that settled it.
+That is also why running from RAM looked like the answer: RAM has no wait
+states, so an overclocked CPU can still fetch from it. solo.c's 207 reads from
+RAM against a stop on the first pass from flash were a real measurement of a
+real effect, pointing at the level below the cause. With the clock right, the
+flash-resident build has no reason to fail, and this script has no job left.
 
-So this is not a speed trick and has nothing to do with the software I2C's
-timing, which can wait as long as it likes. It is about where instructions are
-fetched from.
+What follows is how it works, for anyone who wants code in RAM for some other
+reason.
 
 How: -ffunction-sections puts every C function in its own .text.<name>, while
 start.S's own code sits in plain .text. So .text stays in ROM and every

@@ -120,14 +120,12 @@ int	main(void)
 	SYSTEM.PLLCR2.BIT.PLLEN = 0;
 	while (!(SYSTEM.OSCOVFSR.BIT.PLOVF))
 		;
-	SYSTEM.SCKCR.BIT.ICK = 1;
-	SYSTEM.SCKCR.BIT.FCK = 2;
-	SYSTEM.SCKCR.BIT.PCKA = 1;
-	SYSTEM.SCKCR.BIT.PCKB = 2;
-	SYSTEM.SCKCR.BIT.PCKC = 2;
-	SYSTEM.SCKCR.BIT.PCKD = 2;
-	SYSTEM.SCKCR.BIT.PSTOP0 = 1;
-	SYSTEM.SCKCR.BIT.PSTOP1 = 1;
+	/*
+		One 32-bit write. Field by field leaves ICK at 0 and ICLK at
+		240 MHz - see envision_hw.c, where that was measured and is
+		explained.
+	*/
+	SYSTEM.SCKCR.LONG = 0x21C11222UL;
 	SYSTEM.SCKCR3.BIT.CKSEL = 4;
 	SYSTEM.PRCR.WORD = 0xa500;
 #else
@@ -135,10 +133,15 @@ int	main(void)
 #endif
 #ifdef	DIAG12_ROMCE
 	/*
-		-DDIAG12_ROMCE: the ROM cache on. Every fault is an instruction
-		that is right in the flash and wrong where the processor fetched
-		it, so fetching from the cache instead is the obvious thing to
-		try.
+		-DDIAG12_ROMCE: the ROM cache on. The theory was that every
+		fault was an instruction right in the flash and wrong where the
+		processor fetched it, so fetching from a cache might avoid it.
+
+		The reading was right and the cause was elsewhere: SCKCR written
+		field by field left ICLK at 240 MHz, so the flash was being read
+		at twice the speed its wait states were set for. See
+		envision_hw.c. The cache is left as an option because it is a
+		real feature worth having, not because it fixes anything.
 	*/
 	FLASH.ROMCIV.BIT.ROMCIV = 1;
 	while ((FLASH.ROMCIV.BIT.ROMCIV))
