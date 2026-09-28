@@ -470,6 +470,19 @@ there are none - 277 ms is also the maximum, not just the median. Two runs
 each produced a single 538-540 ms gap, which is exactly two periods and so
 reads as one line lost rather than a stall.
 
+**A warning about every rate below.** The same image, measured twice in
+different sessions, gave 6 of 16 and 13 of 16. So a rate is not a property of an
+image alone, and two builds measured at different times cannot be compared -
+which invalidates the neatest result this investigation produced, that upstream's
+demo needs the ICU to be delivering interrupts to fail. Within one session,
+switching the interrupt enables off took it from 6 of 16 to 16 of 16 twice over;
+in a later session a build with them on ran 16 of 16 as well. Comparisons from
+here have to interleave the builds inside one session, not follow one another.
+
+The separations below are wide enough - 8 of 8 against 0 of 8, five times over -
+to be worth recording, but they were measured the wrong way and deserve redoing
+interleaved.
+
 **Survival rates, measured with `tools/rep.sh`** - one image programmed once,
 then reset and captured repeatedly, eight runs of twelve seconds each:
 
@@ -507,30 +520,57 @@ loop in it, which cannot hang. In a no-display build the stop lands after the
 back-edge between there and the next mark. So this is control leaving the code,
 not code waiting for something.
 
-**And in one failure mode the program is not stopped at all.** A log that ends
-in an endless run of `U` looks like garbage until the status word beside each
-read is printed, which `probe_uartraw.py` in the rxflash repo now does. The
-answer: `status=00000000`, 256 bytes of 0x55, every 22 ms, which is 115200
-saturated.
+**What the fault actually is: an endless undefined-instruction exception.**
+
+A log that ends in an endless run of `U` was read here first as garbage and
+then, once the status word beside each read was printed, as the MCU genuinely
+transmitting 0x55 at the full line rate - `status=00000000`, 256 bytes every
+22 ms, which is 115200 saturated:
 
     0.432 status=00000000 filled=True  256 bytes  55*242 70*1 49*1 73*1  b'pIswP123456789UUUUUUUUUU'
     0.454 status=00000000 filled=True  256 bytes  55*256
 
-The MCU is running and writing 0x55 to TDR as fast as the transmitter takes it.
-Nothing in this port ever sends that byte. So there are two failure modes, not
-one: a silent stop, and this. The 0x55 flood also predates the mark hook, so it
-is not the hook's doing.
+Both readings missed what it is. `U` is `tools/patch-inthandler.py`'s letter for
+the undefined-instruction exception, one character per entry, and its own
+docstring says what a flood of one letter means: the handler returns with RTE,
+which re-runs the instruction that faulted, which faults again. So this is not a
+second failure mode and not a mystery byte. It is the fault, reported by this
+port's own instrumentation, and it says the CPU reached an undefined instruction
+and has been looping on the exception ever since.
+
+That also explains the silent stops. An empty handler does exactly the same
+thing without saying so, and upstream's `inthandler.c` defines all of them
+empty:
+
+    void INT_Excep_UndefinedInst(void){/* brk(){  } */}
+
+The handlers themselves are correct in one respect worth checking, since getting
+it wrong would produce precisely this symptom: `interrupt_handlers.h` declares
+every one with `__attribute__((interrupt))`, and the disassembly confirms they
+end in `rte` rather than `rts`.
+
+    fff0189d: 7f 95    rte
 
 **Flash is intact afterwards.** `rxflash.py verify` compares flash against the
 image without writing, and after each stop all 19200 bytes and the fixed vector
 table matched. A program corrupting its own code through the flash control unit
 would have looked exactly like this, and does not.
 
-**So the honest summary**: every build of this port fails eventually, optimised
-ones within seconds and unoptimised ones rarely within a minute; when it fails,
-control has left the source's flow right after a completed I2C step, and the CPU
-is sometimes still running and flooding the UART. Nothing found so far explains
-it. What is now in place is the means to tell a change from luck - `rep.sh` for
+**Upstream's own demo fails too**, which takes this port's code out of the
+question. Built from upstream's sources with upstream's settings and nothing
+added but a serial log, EnvisionDemo1 stopped after 7.3 seconds with `p02=1`
+throughout - so before its first-touch gate had opened, meaning it had put
+nothing on the I2C bus at all - and with `touched` false, so it had drawn
+nothing either. Taking `lcd_init()` out does not stop it either, so the display
+controller is not needed. What was running: the clock setup, SCI1 transmitting,
+and a loop reading one GPIO.
+
+**So the honest summary**: every build of this port and of upstream's demo fails
+eventually; when it fails, the CPU has reached an undefined instruction and is
+looping on the exception, which looks like a stopped program whether the handler
+is silent or printing. What makes the CPU get there is not known. The rate at
+which it happens moves with any change to the binary and also between sessions,
+so rates are nearly useless as evidence and the exception letter is not. What is now in place is the means to tell a change from luck - `rep.sh` for
 rates, `stamp.py` for whether a run was slow or short, `i2cmark.c` for where, and
 `verify` and `probe_uartraw.py` for two of the explanations that turned out to be
 wrong.
