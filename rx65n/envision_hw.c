@@ -104,7 +104,16 @@ void	envision_clock_init(void)
 	SYSTEM.SOSCCR.BIT.SOSTP = 1;
 
 	/* no USB clock */
-	SYSTEM.SCKCR2.WORD = 0x0001;
+	/*
+		UCK = 4, divide by five, which is what the vendor's working sample
+		writes. This port and the demo it came from wrote 0x0001, leaving
+		UCK at 0 - a value the USB clock divider has no setting for. It was
+		measured not to be the cause of anything here (six rounds each,
+		interleaved, no difference), but writing a reserved value into a
+		clock control register is not worth keeping once a sample that
+		works is known not to.
+	*/
+	SYSTEM.SCKCR2.WORD = 0x0041;
 
 	/* drive level for a 12MHz input, and its stabilisation wait */
 	SYSTEM.MOFCR.BIT.MODRV2 = 2;
@@ -155,38 +164,58 @@ void	envision_clock_init(void)
 	while (SYSTEM.OSCOVFSR.BIT.PLOVF == 0)
 		__asm__ __volatile__ ("nop");
 
-#ifdef	ENVISION_ICLK_60
 	/*
-		For one experiment: the processor at half speed.
+		One 32-bit write. This is the fix for the fault this port spent
+		days on, and the reason is worth stating plainly, because writing
+		the same fields one at a time looks harmless and is not.
 
-		The fault this port is chasing looks like instruction fetch going
-		wrong - undefined instructions and PCs one byte into a valid
-		instruction - and whether it appears depends on nothing more than
-		how the code is laid out: a build with the console compiled in but
-		never switched on faults, the same program without it does not.
-		That pattern fits a fetch with too little margin, from the clock,
-		the supply, or the flash wait states. Halving ICLK widens every one
-		of those margins at once, so if the fault survives this, all three
-		are ruled out together.
+		Each SYSTEM.SCKCR.BIT.x assignment is a read-modify-write of the
+		whole 32-bit register. Written that way - ICK, then FCK, then
+		PCKA, and so on - the register does not end up holding what the
+		source says. Measured on the board, three times identically:
 
-		PCLKA comes down with it because the peripheral clocks must not
-		run faster than ICLK. The panel's dot clock is taken from the PLL
-		directly, not from either, so the display is unaffected; the delay
-		loops calibrated for 120MHz simply run twice as long.
+		    one write:        sckcr = 0x21C11222   ICK 1, ICLK 120 MHz
+		    field by field:   sckcr = 0x20C01222   ICK 0, ICLK 240 MHz
+
+		The first write's ICK is lost, because the next read-modify-write
+		reads the register back before the previous write has taken
+		effect and writes the stale upper half out again. BCK goes the
+		same way.
+
+		ICK 0 is divide by one: 240 MHz, twice this part's maximum. ROMWT
+		= 2 is the wait setting for 120 MHz, so at 240 the flash cannot
+		keep up and instruction fetch returns rubbish. That is the whole
+		of the intermittent fault: undefined instructions at addresses the
+		disassembly says are correct, an exception handler that returns
+		with RTE onto the instruction that faulted, and a program that
+		looks stopped. It is intermittent because it is a margin, not a
+		certainty - and a build with its code in RAM survives it, because
+		RAM has no wait states.
+
+		Upstream's EnvisionDemo1 writes these fields one at a time too,
+		which is why it fails in the same way; the vendor's own e2 studio
+		sample writes SCKCR in one store, and does not.
+
+		0x21C11222: ICK /2 = 120, FCK /4 = 60, PCKA /2 = 120,
+		PCKB, PCKC and PCKD /4 = 60, BCK /2, PSTOP0 and PSTOP1 set.
 	*/
-	SYSTEM.SCKCR.BIT.ICK = 2;		/* ICLK   60MHz */
-	SYSTEM.SCKCR.BIT.FCK = 2;		/* FCLK   60MHz */
-	SYSTEM.SCKCR.BIT.PCKA = 2;		/* PCLKA  60MHz */
+#ifdef	ENVISION_SCKCR_FIELDS
+	/*
+		The broken sequence, kept because it reproduces the fault on
+		demand and nothing else here does. Do not build with this except
+		to watch it fail.
+	*/
+	SYSTEM.SCKCR.BIT.ICK = 1;
+	SYSTEM.SCKCR.BIT.FCK = 2;
+	SYSTEM.SCKCR.BIT.PCKA = 1;
+	SYSTEM.SCKCR.BIT.PCKB = 2;
+	SYSTEM.SCKCR.BIT.PCKC = 2;
+	SYSTEM.SCKCR.BIT.PCKD = 2;
+	SYSTEM.SCKCR.BIT.PSTOP0 = 1;
+	SYSTEM.SCKCR.BIT.PSTOP1 = 1;
 #else
-	SYSTEM.SCKCR.BIT.ICK = 1;		/* ICLK  120MHz */
-	SYSTEM.SCKCR.BIT.FCK = 2;		/* FCLK   60MHz */
-	SYSTEM.SCKCR.BIT.PCKA = 1;		/* PCLKA 120MHz */
+	SYSTEM.SCKCR.LONG = 0x21C11222UL;
 #endif
-	SYSTEM.SCKCR.BIT.PCKB = 2;		/* PCLKB  60MHz */
-	SYSTEM.SCKCR.BIT.PCKC = 2;		/* PCLKC  60MHz */
-	SYSTEM.SCKCR.BIT.PCKD = 2;		/* PCLKD  60MHz */
-	SYSTEM.SCKCR.BIT.PSTOP0 = 1;		/* SDCLK unused */
-	SYSTEM.SCKCR.BIT.PSTOP1 = 1;		/* BCLK  unused */
 
 	SYSTEM.SCKCR3.BIT.CKSEL = 4;		/* switch to the PLL */
 	SYSTEM.LOCOCR.BYTE = 1;			/* LOCO no longer needed */

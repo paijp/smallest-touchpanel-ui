@@ -402,6 +402,57 @@ with a listener already attached, so a capture starts at the program's
 first byte. `BREAK` takes several locations, which is what a bisect needs,
 because this gdb stops answering once the target is running.
 
+### What it was: SCKCR written one field at a time, and a 240 MHz ICLK
+
+Writing `SYSTEM.SCKCR` field by field does not leave the register holding what
+the source says. Each `SYSTEM.SCKCR.BIT.x = n` is a read-modify-write of the
+whole 32-bit register, and the next one reads it back before the previous write
+has taken effect. Measured on the board, three times identically:
+
+    one 32-bit write:   sckcr = 0x21C11222    ICK 1, ICLK 120 MHz
+    field by field:     sckcr = 0x20C01222    ICK 0, ICLK 240 MHz
+
+ICK 0 is divide by one. **The part was running at 240 MHz, twice its maximum**,
+with `ROMWT = 2`, which is the wait setting for 120. The flash cannot keep up, so
+instruction fetch returns rubbish, and that is the whole fault:
+
+- undefined instructions at addresses whose disassembly is correct - the
+  contradiction this investigation kept running into
+- an exception handler that returns with RTE onto the instruction that faulted,
+  which faults again, which is why a stopped program and a flood of `U` are the
+  same thing
+- intermittent, because it is a margin rather than a certainty
+- and survivable from RAM, which has no wait states - which is exactly what
+  `solo.c` measured, 207 reads against a stop on the first, and why that result
+  was real but pointed at the wrong culprit
+
+The proof is an interleaved run of three builds differing only in the clock
+code, six rounds of 25 seconds each:
+
+| build | SCKCR2 | SCKCR | survived |
+|----|----|----|----|
+| one 32-bit write | 0x0041 | one write | **6 of 6** |
+| SCKCR2 reverted | 0x0001 | one write | **6 of 6** |
+| **SCKCR field by field** | 0x0041 | eight field writes | **2 of 6** |
+
+All four failures were the `U` flood. And the two runs the broken build did
+survive gave 902 passes against the others' 725 - 36 a second against 29 - which
+is the overclocked CPU showing up in the pass rate.
+
+`SCKCR2` was a red herring: this port wrote 0x0001, leaving UCK at 0, a value the
+USB clock divider has no setting for, where the vendor sample writes 0x0041. It
+is fixed because it is wrong, not because it did anything.
+
+**Upstream's EnvisionDemo1 has the same bug**, writing the same fields one at a
+time, which is why it fails the same way - and why the vendor's own e2 studio
+sample, which writes SCKCR in one store, runs under continuous touching and does
+not.
+
+`-DENVISION_SCKCR_FIELDS` keeps the broken sequence, because it is the only
+switch that reproduces the fault on demand.
+
+### How it looked while it was open
+
 ### Where the fault stands: intermittent, and not fixed
 
 It is still open. What follows is what the measurements support and, just as
