@@ -439,20 +439,20 @@ W	tplib_proc_tenkey(struct tplib_parts_struct *p, UW cmd)
 	static	W	val;
 	static	struct	tplib_parts_struct	parts[] = {
 		{tplib_parts_fill, 0, 0, LCD_W, LCD_H, 0x0000, NULL, NULL, NULL, 0}, 
-		{tplib_parts_dec, 16, 16, 112, 24, 0, &val, NULL, NULL, 0}, 
+		{tplib_parts_dec, 16, 8, 112, 24, 0, &val, NULL, NULL, 0}, 
 		{tplib_parts_button, TPLIB_REL + 32, TPLIB_REL, 64, 32, -1, NULL, NULL, "<-", 0}, 
-		{tplib_parts_button, 16, TPLIB_REL + 48, 64, 48, 7, NULL, NULL, "7", 0}, 
-		{tplib_parts_button, TPLIB_REL + 8, TPLIB_REL, 64, 48, 8, NULL, NULL, "8", 0}, 
-		{tplib_parts_button, TPLIB_REL + 8, TPLIB_REL, 64, 48, 9, NULL, NULL, "9", 0}, 
-		{tplib_parts_button, 16, TPLIB_REL + 64, 64, 48, 4, NULL, NULL, "4", 0}, 
-		{tplib_parts_button, TPLIB_REL + 8, TPLIB_REL, 64, 48, 5, NULL, NULL, "5", 0}, 
-		{tplib_parts_button, TPLIB_REL + 8, TPLIB_REL, 64, 48, 6, NULL, NULL, "6", 0}, 
-		{tplib_parts_button, 16, TPLIB_REL + 64, 64, 48, 1, NULL, NULL, "1", 0}, 
-		{tplib_parts_button, TPLIB_REL + 8, TPLIB_REL, 64, 48, 2, NULL, NULL, "2", 0}, 
-		{tplib_parts_button, TPLIB_REL + 8, TPLIB_REL, 64, 48, 3, NULL, NULL, "3", 0}, 
-		{tplib_parts_button, 16, 256 + 16, 64, 32, -2, NULL, NULL, "cancel", 0}, 
-		{tplib_parts_button, TPLIB_REL + 8, 256, 64, 48, 0, NULL, NULL, "0", 0}, 
-		{tplib_parts_button, TPLIB_REL + 8, 256 + 16, 64, 32, -3, NULL, NULL, "OK", 0}, 
+		{tplib_parts_button, 16, TPLIB_REL + 40, 64, 40, 7, NULL, NULL, "7", 0}, 
+		{tplib_parts_button, TPLIB_REL + 8, TPLIB_REL, 64, 40, 8, NULL, NULL, "8", 0}, 
+		{tplib_parts_button, TPLIB_REL + 8, TPLIB_REL, 64, 40, 9, NULL, NULL, "9", 0}, 
+		{tplib_parts_button, 16, TPLIB_REL + 48, 64, 40, 4, NULL, NULL, "4", 0}, 
+		{tplib_parts_button, TPLIB_REL + 8, TPLIB_REL, 64, 40, 5, NULL, NULL, "5", 0}, 
+		{tplib_parts_button, TPLIB_REL + 8, TPLIB_REL, 64, 40, 6, NULL, NULL, "6", 0}, 
+		{tplib_parts_button, 16, TPLIB_REL + 48, 64, 40, 1, NULL, NULL, "1", 0}, 
+		{tplib_parts_button, TPLIB_REL + 8, TPLIB_REL, 64, 40, 2, NULL, NULL, "2", 0}, 
+		{tplib_parts_button, TPLIB_REL + 8, TPLIB_REL, 64, 40, 3, NULL, NULL, "3", 0}, 
+		{tplib_parts_button, 16, 192 + 4, 64, 32, -2, NULL, NULL, "cancel", 0}, 
+		{tplib_parts_button, TPLIB_REL + 8, 192, 64, 40, 0, NULL, NULL, "0", 0}, 
+		{tplib_parts_button, TPLIB_REL + 8, 192 + 4, 64, 32, -3, NULL, NULL, "OK", 0}, 
 		{NULL}
 	};
 	
