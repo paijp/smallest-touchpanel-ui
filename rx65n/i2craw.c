@@ -69,7 +69,18 @@ How much stack the program is using goes on the line as well. The layout the
 #include	"seriallog.h"
 
 
+/*
+	How long to wait between passes. -DPERIOD_MS=0 takes the wait out
+	altogether, so the loop runs as fast as the I2C transaction, the drawing and
+	the serial line allow - about ten times the rate, which is ten times as many
+	transactions per second to provoke the fault with. It also makes the
+	timestamp this prints meaningless, since that is the pass counter times the
+	intended period; use tools/stamp.py, whose times are the host's clock and are
+	what the gap between passes has to be measured from anyway.
+*/
+#ifndef	PERIOD_MS
 #define	PERIOD_MS	200
+#endif
 
 #define	PAD		6
 #define	LINE_H		14
@@ -337,6 +348,8 @@ int	main(void)
 		}
 		lcdtp_sendlogs("\r\n");
 
+#if	PERIOD_MS > 0
 		dly_tsk(PERIOD_MS);
+#endif
 	}
 }
