@@ -95,8 +95,28 @@ void	envision_clock_init(void)
 	/* unlock the clock control registers */
 	SYSTEM.PRCR.WORD = 0xa50b;
 
-	/* resonator, not an external clock */
-	SYSTEM.MOFCR.BIT.MOSEL = 0;
+	/*
+		A resonator rather than an external clock, and the drive level for
+		12 MHz, in one read and one write.
+
+		Both fields live in MOFCR, and this used to set them with two
+		separate SYSTEM.MOFCR.BIT.x assignments, which is two
+		read-modify-writes of a clock control register - the same shape as
+		the SCKCR bug documented below, where the second read returned the
+		value from before the first write and put it back. Nothing was
+		measured going wrong here, and it is not worth leaving in place to
+		find out.
+
+		MOSEL is bit 0 and MODRV2 is bits 5:4; 2 means the 8 to 16 MHz
+		drive. Everything else in the register is left as it was found.
+	*/
+	{
+		UB	mofcr = SYSTEM.MOFCR.BYTE;
+
+		mofcr &= (UB)~0x31;		/* MOSEL = 0, MODRV2 = 0 */
+		mofcr |= 0x20;			/* MODRV2 = 2 */
+		SYSTEM.MOFCR.BYTE = mofcr;
+	}
 
 	/* the HOCO and the sub-clock are unused, so stop and unpower them */
 	SYSTEM.HOCOCR.BIT.HCSTP = 1;
@@ -115,8 +135,7 @@ void	envision_clock_init(void)
 	*/
 	SYSTEM.SCKCR2.WORD = 0x0041;
 
-	/* drive level for a 12MHz input, and its stabilisation wait */
-	SYSTEM.MOFCR.BIT.MODRV2 = 2;
+	/* the oscillator's stabilisation wait; the drive level is set above */
 	SYSTEM.MOSCWTCR.BYTE = 0x53;
 	SYSTEM.MOSCCR.BIT.MOSTP = 0;
 
@@ -158,8 +177,18 @@ void	envision_clock_init(void)
 	while (SYSTEM.ROMWT.BIT.ROMWT != 2)
 		__asm__ __volatile__ ("nop");
 
-	SYSTEM.PLLCR.BIT.PLIDIV = 0;		/* /1 */
-	SYSTEM.PLLCR.BIT.STC = 39;		/* x20 */
+	/*
+		PLIDIV 0 (divide the input by one), PLLSRSEL 0 (the main clock as
+		the source) and STC 39 (multiply by twenty) are all in PLLCR, so
+		they go in one 16-bit write: STC is bits 13:8, and 39 is 0x27.
+
+		This was two SYSTEM.PLLCR.BIT.x assignments, which is two
+		read-modify-writes of a clock control register - the same shape as
+		the SCKCR bug below. The PLL is not running yet when they happen,
+		which may be why nothing was ever seen to go wrong; that is not a
+		reason to keep it.
+	*/
+	SYSTEM.PLLCR.WORD = 0x2700;
 	SYSTEM.PLLCR2.BIT.PLLEN = 0;		/* run */
 	while (SYSTEM.OSCOVFSR.BIT.PLOVF == 0)
 		__asm__ __volatile__ ("nop");
