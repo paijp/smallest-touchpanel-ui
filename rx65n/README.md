@@ -565,12 +565,57 @@ nothing either. Taking `lcd_init()` out does not stop it either, so the display
 controller is not needed. What was running: the clock setup, SCI1 transmitting,
 and a loop reading one GPIO.
 
+**The option-setting memory, which this port has never written.** The build
+strips every `.ofs` section, so MDE, OFS0 and OFS1 are whatever is on the chip -
+and on this board MDE read `0xFFFFFF8F`, which is not the erased value: bit 6
+clear is dual bank mode, put there by e2 studio, not by anything here. OFS0 and
+OFS1 both read `0xFFFFFFFF`, so the watchdog is off and so is voltage detection.
+Two things follow. One is that these builds have been running on a configuration
+nobody here chose. The other is that the linker script cannot set it even if you
+un-strip the sections: `.ofs1`'s load address comes out as `0xFE7F5D40`, the SPCC
+register's slot, rather than the `0xFE7F5D00` the script's own `AT()` asks for,
+and `.ofs4` through `.ofs7` all share VMA `0xFE7F5D10`. Those mappings are broken
+and have to be fixed before the sections can be used.
+
+Nor can the flash tool set it: the serial boot protocol lists the config area in
+its area inquiry and then rejects read, erase and program on it alike, all with
+error 0xD0. The option-setting memory is flash rather than registers, whatever
+the hardware manual's "OFSM is the collective name for the following registers"
+suggests, so the way in is the flash sequencer, from code on the MCU. The recipe,
+from the FIT flash module's bank-toggle function: FCU command area `0x007E0000`,
+`FLASH.FPCKAR = 0x1E00 + FCLK in MHz`, code-flash P/E mode with
+`FENTRYR = 0xAA01` until it reads `0x0001`, `FWEPROR = 0x01`, then
+`FSADDR = 0x00FF5D00` and the Configuration Set command - byte `0x40`, byte `0x08`
+for eight words, eight 16-bit words, byte `0xD0` - and poll `FSTATR.FRDY`. It
+programs 16 bytes at a time and can set bits back to 1 as well as to 0, which is
+what the bank toggle relies on, so it is reversible.
+
+Two things about doing it are not optional. The sequence must run from RAM,
+because entering code-flash P/E mode makes the code flash unreadable - and so
+must its data: a first attempt read the eight words from a `static const` array,
+which lives in `.rodata` in that same unreadable flash, and what reached the
+sequencer was whatever an unreadable flash returns. It programmed that into the
+option memory - `mde=7f03a1e7 ofs0=a712fba8 ofs1=39fff012` - with `FSTATR`
+reporting success, which is worth knowing because OFS0 holds the watchdog
+settings. Copy the words to the stack first. And interrupts have to be masked
+across it, since a vector fetch would read flash too.
+
+With that fixed, MDE went back to `0xFFFFFFFF`, and the probe's own area map
+confirms it: dual mode reports four regions and linear mode two, the 8 KB region
+at the top of each bank having become one.
+
+**It made no difference.** Interleaved, twenty rounds each, in linear mode: 20 of
+20 and 20 of 20, the same as in dual mode. So the bank mode is not it.
+
 **So the honest summary**: every build of this port and of upstream's demo fails
 eventually; when it fails, the CPU has reached an undefined instruction and is
 looping on the exception, which looks like a stopped program whether the handler
 is silent or printing. What makes the CPU get there is not known. The rate at
 which it happens moves with any change to the binary and also between sessions,
-so rates are nearly useless as evidence and the exception letter is not. What is now in place is the means to tell a change from luck - `rep.sh` for
+so rates are nearly useless as evidence and the exception letter is not - and at
+the time of writing the board has run 112 consecutive captures without a single
+failure, in configurations that were failing 6 of 16 a day earlier, which is its
+own unexplained fact and makes every comparison useless until it fails again. What is now in place is the means to tell a change from luck - `rep.sh` for
 rates, `stamp.py` for whether a run was slow or short, `i2cmark.c` for where, and
 `verify` and `probe_uartraw.py` for two of the explanations that turned out to be
 wrong.
