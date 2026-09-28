@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Run all C code out of RAM, by patching the fetched linker script and start.S.
 
-Kept for the record; not the fix. Building with -O0 and without --gc-sections
-runs the port reliably from ROM, and faster: 212 passes of i2craw in a minute
-against 28 for the same program in RAM, and the RAM builds' seven-fold
-slowdown is not explained. See the README for the measurements. What follows
-is the reasoning that led here, which was right that the flash-resident builds
-were the ones that stopped and wrong about why.
+Kept for the record; not the fix. The port's own RAM builds stop like every
+other build - 17, 28 and 41 passes of i2craw, at the same 276-277 ms period as
+a healthy run, so they stop rather than run slowly. Building at -O0 and leaving
+the code in ROM lasts far longer. So what follows is the reasoning that led
+here; solo.c's result was real, but it does not generalise to the port, and
+running from RAM is not established as avoiding anything. See the README.
 
 Why: on this board a program fetched from flash leaves the control flow the
 source describes - the disassembly is correct and every loop in it is bounded,

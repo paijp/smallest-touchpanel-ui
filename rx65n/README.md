@@ -28,10 +28,12 @@ bash fetch-lcdtp.sh
 make DEMO=lcdtp
 ```
 
-**Build it with `-O0` and without `--gc-sections`.** Neither is a preference:
-with any optimisation, or with `--gc-sections` on, the program stops within
-seconds of starting, and the section below has the measurements. This is the
-one setting in the build that has to be right.
+**Build it with `-O0`.** Every optimised build stops within seconds of
+starting, and stops in the middle of printing a line; unoptimised ones usually
+run for minutes. It is not a cure - the fault is intermittent and still open,
+and the section on it below has the measurements and what they do and do not
+support - but it is the difference between a demo that runs and one that does
+not.
 
 `fetch-lcdtp.sh` pulls two things: this port, and the `generate/` directory
 from [miniwinwm/RenesasEnvisionGCC](https://github.com/miniwinwm/RenesasEnvisionGCC)
@@ -400,102 +402,102 @@ with a listener already attached, so a capture starts at the program's
 first byte. `BREAK` takes several locations, which is what a bisect needs,
 because this gdb stops answering once the target is running.
 
-### What it turned out to be: the build
+### Where the fault stands: intermittent, and not fixed
 
-`-O0`, and no `--gc-sections`. With those two the program runs; with any
-optimisation at all it stops within seconds. Measured on i2craw, 200 ms per
-pass, left untouched, 60 seconds of capture each:
+It is still open. What follows is what the measurements support and, just as
+importantly, what they do not - this section has been rewritten twice already
+because single runs were read as if they were effects.
 
-| -O | `-ffunction-sections`, `-fdata-sections` | `--gc-sections` | code in | passes | how the log ended |
-|----|----|----|----|----|----|
-| -O2 | yes | yes | ROM | 5 / 0 / 18 | mid-line |
-| -O2 | no | no | ROM | 9 | mid-line |
-| -O1 | no | no | ROM | 1 | mid-line |
-| -Os | no | no | ROM | 0 | mid-line |
-| -O0 | yes | **yes** | ROM | 1 | one line, then nothing |
-| **-O0** | no | no | ROM | **115 / 136 / 212** | still running at the timeout |
-| **-O0** | yes | no | ROM | **212** | still running at the timeout |
-| -O0 | yes | yes | RAM | 17 | running, but seven times slower |
-| -O0 | yes | no | RAM | 28 | running, but seven times slower |
+**The method that made the difference.** Counting how many passes a run
+produced, and dividing by the length of the capture, is not a measurement of
+anything: a run that stops after fifteen seconds of a sixty-second window
+looks exactly like a run that is four times slower. `tools/stamp.py` prefixes
+each line with the wall-clock time it arrived, and the gap between passes then
+says which. Every conclusion below rests on that, and two earlier ones did not
+survive it.
 
-"mid-line" is the telling column: the log stops in the middle of printing a
-line, so the program stopped, not the transmitter. The two configurations
-that survive end with a complete line and a CRLF, because the capture's
-timeout ended them rather than the board.
+**What holds up.**
 
-Then the real test, which is touching the panel: `-O0` without
-`--gc-sections`, 645 passes over 129 seconds, touches reported with sensible
-coordinates, `gaveup=0` and `nak=0/0` and `drops=0` throughout, log ending
-cleanly. That is the case that used to freeze within a touch or two.
+- A running build's period is 276-277 ms, and it is the same in every build
+  measured. Over 211 consecutive gaps the minimum was 276 ms and the maximum
+  277 ms, with no outlier: the loop is nominally 200 ms, so the real figure is
+  277 ms, steadily. There is no fast build and no slow build.
+- Optimised builds stop, and they stop mid-line, with the log cut in the middle
+  of printing: -O2 at 5, 0, 18 and 0 passes, -O2 without the section flags at
+  9, -O1 at 1, -Os at 0. Eight runs, eight stops. The mid-line ending is worth
+  noting on its own, because it means the program stopped rather than the
+  transmitter.
+- `-O0` is much better but is not a cure. Most runs go the whole window - 96,
+  115, 136, 212, 212, 212, 212, 211, 191, 104 passes and more - and the best of
+  them survived 645 passes over 129 seconds with the panel being touched,
+  `gaveup=0` and `nak=0/0` and `drops=0` throughout. But the same build also
+  produced 46 and 59 and 0.
+- `--gc-sections` removes nothing the program needs. `-Wl,--print-gc-sections`
+  lists eight sections: `.text.INT_Excep_BRK`, `.text.INT_Excep_USBA_USBAR`,
+  `.text.gettp`, `.text.gget_stw`, `.text.lcdtp_sendloguw`,
+  `.text.seriallog_getc`, `.bss.lcdtp_flip` and `.bss.pressed.1`. Walking all
+  288 entries of `.exvectors`, `.fvectors` and `.rvectors` finds no reference to
+  any of the four removed functions, and BRK's slot points at the same shared
+  dummy handler either way, because `patch-inthandler.py` substitutes its own.
+  Wrapping every code and data wildcard in the linker script in `KEEP()` makes
+  the flag remove nothing, and the image is then byte-identical to the build
+  without it - `cmp` on the S-records agrees. So the flag has no effect beyond
+  deletion: no reordering, no realignment.
 
-So the flags this port needs are
+**What does not hold up, and is retracted.**
 
-    -O0            and no --gc-sections
+- *That the fault follows the address layout.* Padding the linker script to
+  move the code by 64, 256 and 1144 bytes changed nothing that repeated, and
+  padding `.bss` to move the data likewise. The test that settled it: two
+  captures of one `.bss`-padded image, confirmed byte-identical with `cmp`,
+  gave 0 passes and 104 passes. An image cannot have a layout-determined fault
+  and behave two ways.
+- *That some builds run slower.* They do not. The builds that looked seven
+  times slower - the RAM-resident ones, and the 1144-byte-padded one - run at
+  the same 276-277 ms and stop early: 59 passes at 276 ms is sixteen seconds of
+  a forty-second window, not a slow run.
+- *That running from RAM avoids it.* `solo.c` really did do 207 reads from RAM
+  against a stop on the first pass from flash, and that is what
+  `tools/patch-ramtext.py` was built on. But the port's own RAM builds stop
+  like the rest, at 17, 28 and 41 passes, at the ordinary speed. So the
+  instruction fetch is not established as the fault, and the flag is kept for
+  the record rather than as a fix.
 
-`-ffunction-sections` and `-fdata-sections` make no difference either way
-(212 passes with them, 212 without), so they can stay.
+**What this says about the debugger**, which is a reasonable suspect for a
+board whose on-board E2 is enabled by SW1-1: nothing in these traces looks
+like it. A debug unit taking time would show as occasional long gaps, and
+there are none - 277 ms is also the maximum, not just the median. Two runs
+each produced a single 538-540 ms gap, which is exactly two periods and so
+reads as one line lost rather than a stall.
 
-**This corrects what this file said before.** The earlier conclusion was that
-the fault was in fetching instructions from flash, on the strength of
-`solo.c` running 207 reads from RAM against a stop on the first pass from
-flash. That reading was confounded: every `-O0` test until now was made with
-`--gc-sections` still on, which breaks the program by itself, so `-O0` looked
-like no help. Running from RAM does help - the RAM builds survive where the
-optimised flash builds do not - but it is not the cleanest fix and it is not
-free: those builds get through seven times fewer passes in the same time,
-which is not explained. `-O0` with the ROM-resident layout is both faster and
-more reliable, so `tools/patch-ramtext.py` is kept for the record rather than
-needed.
+**So the honest summary** is that every build of this port stops eventually,
+that optimised builds stop within seconds and unoptimised ones usually last
+minutes, and that nothing found so far explains why. Since the failure is
+intermittent, the next thing this needs is not another single-run experiment
+but repetition: the same image, many captures, counting survivals, so that a
+change can be told from luck.
 
-`--gc-sections` is not deleting anything the program needs, and it is worth
-being precise about that, because the flag's name invites the assumption that
-it is. `-Wl,--print-gc-sections` lists everything it removed here, and it is
-eight sections: `.text.INT_Excep_BRK`, `.text.INT_Excep_USBA_USBAR`,
-`.text.gettp`, `.text.gget_stw`, `.text.lcdtp_sendloguw`,
-`.text.seriallog_getc`, `.bss.lcdtp_flip` and `.bss.pressed.1`. The two
-exception handlers are the ones worth checking, since a handler reached only
-through a vector table is the classic thing this flag deletes - but walking
-all 288 entries of `.exvectors`, `.fvectors` and `.rvectors` for those
-addresses finds no reference to any of the four removed functions, and the BRK
-slot points at the same shared dummy handler in both builds. `patch-inthandler.py`
-substitutes its own handlers, so `vects.c`'s originals are dead code either
-way. The rest are functions and variables this program does not call. The
-linker script also `KEEP()`s all three vector tables, which is what would
-otherwise leave them unrooted.
+Ruled out earlier, each by measurement: interrupts (every IER byte zero, and
+the PSW I bit read back from the hardware); all eight exception handlers; a
+reset; the probe (it happens with SW1-1 off, so with the debugger disabled
+entirely); the pins' drive strength; halving ICLK; every library including
+newlib; and the display. A register-by-register comparison against upstream
+found no divergence either: the GLCDC's ~130 writes are identical bar the
+symbolic names, the clock sequence is identical with extra stabilisation waits
+added here, and there is no register upstream writes that this port does not.
 
-So the flag's only effect here is that `.text` shrinks from 15168 to 14024
-bytes and `.bss` from 172 to 164, and every address after that moves. Which
-means the honest statement is not that `--gc-sections` breaks something but
-that **the fault follows the address layout**, and the same caveat applies to
-the optimisation level, since -O1, -Os and -O2 move everything too. Layout and
-optimisation are not separated yet. What argues against layout being the whole
-story is that the two surviving configurations have quite different layouts -
-one function per section against a single `.text` - and both reached exactly
-212 passes, while all three optimised builds stopped within seconds. So the
-optimisation level is the stronger correlate, not a proven cause.
-
-Upstream's e2 studio project, for comparison, builds its only configuration
-(HardwareDebug) with no optimisation level set - so `-O0` - with
-`-fdata-sections` but not `-ffunction-sections`, no `--gc-sections`, and
-GCC 4.8.4 rather than the 14.2 here. Its `.cproject` also declares
-`stackLimit` 0x100 and passes `-Wstack-usage=0x100`, matching the 256-byte
-user stack its linker script lays out; this port raised that to 1 KB and
-measures 392-416 bytes in use, so the original is very tight. Its
-`.launch` file names the main clock outright - `-uInputClock= 12.0000` -
-which independently confirms the 12 MHz this port derives from the PLL
-settings, and `-uWorkRamAddress= 1000` for the debug monitor's work area,
-which lands inside this port's `.data` (0x504-0x1514) and so may account for
-the freezes seen in the gdb era specifically.
-
-Ruled out before that, each by measurement rather than by argument:
-interrupts (every IER byte zero, and the PSW I bit read back from the
-hardware); all eight exception handlers; a reset; the probe (it happens with
-SW1-1 off, so with the debugger disabled entirely); the pins' drive strength;
-halving ICLK; every library including newlib; and the display. A register-by
--register comparison against upstream found no divergence either: the GLCDC's
-~130 writes are identical bar the symbolic names, the clock sequence is
-identical with extra stabilisation waits added here, and there is no register
-upstream writes that this port does not.
+Upstream's e2 studio project settings, for the record, since the -O0 finding
+came from them: its only configuration, HardwareDebug, sets no optimisation
+level, so -O0, with `-fdata-sections` but not `-ffunction-sections`, no
+`--gc-sections`, and GCC 4.8.4 rather than the 14.2 here. Its `.cproject`
+declares `stackLimit` 0x100 and passes `-Wstack-usage=0x100`, matching the
+256-byte user stack its linker script lays out; this port raised that to 1 KB
+and measures 392-416 bytes in use, so the original is very tight. Its `.launch`
+file names the main clock outright - `-uInputClock= 12.0000` - which
+independently confirms the 12 MHz this port derives from the PLL settings, and
+puts the debug monitor's work area at `-uWorkRamAddress= 1000`, inside this
+port's `.data` (0x504-0x1514), which may account for the freezes seen in the
+gdb era specifically.
 
 ## Licence
 
