@@ -39,6 +39,7 @@ int	main(int ac, char **av)
 	};
 	
 	init_lcdtp();
+	lcdtp_sendlogs("sample1: start\n");
 	tplib_setupflip("smallest-touchpanel-ui");
 	for (;;) {
 		tplib_proc(parts, gettp());

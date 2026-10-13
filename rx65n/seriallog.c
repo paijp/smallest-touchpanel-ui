@@ -55,6 +55,15 @@ static	UW	seriallog_drops = 0;
 
 void	seriallog_init(void)
 {
+	/*
+		Once is enough, and twice is not harmless: init_lcdtp() calls this,
+		and so do programs that want their log running before the LCD is -
+		i2craw and touchlog - and a second pass would drop TE for a moment
+		under a character that might be on its way out.
+	*/
+	if ((seriallog_ready))
+		return;
+
 	SYSTEM.PRCR.WORD = 0xa50b;
 	MSTP_SCI1 = 0;
 	SYSTEM.PRCR.WORD = 0xa500;

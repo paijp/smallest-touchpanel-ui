@@ -31,6 +31,7 @@
 
 #include	"lcdtp.h"
 #include	"envision_hw.h"
+#include	"seriallog.h"
 
 UW	lcdtp_flip = 0;
 void	(*lcdtp_polltask)() = NULL;
@@ -516,6 +517,15 @@ void	init_lcdtp()
 		set it up for the wrong frequency.
 	*/
 	envision_clock_init();
+	/*
+		The serial log next, so that a program which only ever calls
+		init_lcdtp() - sample1 among them - has its lcdtp_sendlog*() output
+		come back out of the cable that programmed the board. Until this
+		runs, seriallog_putc() quietly drops everything, which is how
+		sample1 managed to look silent while it logged every touch.
+		After the clock, because the bit rate is derived from PCLKB.
+	*/
+	seriallog_init();
 	envision_touch_init();
 	envision_lcd_init();
 	
