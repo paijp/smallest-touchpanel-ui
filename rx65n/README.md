@@ -28,12 +28,20 @@ bash fetch-lcdtp.sh
 make DEMO=lcdtp
 ```
 
-**Build it with `-O0`.** Every optimised build stops within seconds of
-starting, and stops in the middle of printing a line; unoptimised ones usually
-run for minutes. It is not a cure - the fault is intermittent and still open,
-and the section on it below has the measurements and what they do and do not
-support - but it is the difference between a demo that runs and one that does
-not.
+**Any optimisation level works.** This README used to say "build it with `-O0`",
+because optimised builds stopped within seconds. That was the SCKCR fault
+described below - ICLK running at twice its maximum - showing through, not the
+optimiser. After the fix, the measurement that produced the rule was repeated
+the right way, interleaved in one session, 8 runs of 12 seconds each:
+
+| build | GNURX 14.2 | upstream GCC 16.1 |
+|----|----|----|
+| `i2craw`, every source at -O0 | 8 of 8 | 8 of 8 (with -g) |
+| `i2craw`, every source at -O2 | **8 of 8** | **8 of 8** (with -g) |
+| `i2craw` -O2 with the old field-by-field SCKCR write | 0 of 8 | 0 of 8 |
+
+and `sample1` at -O2 ran and logged every touch. The survival-rate table further
+down is kept as the record of what the fault looked like, not as advice.
 
 `fetch-lcdtp.sh` pulls two things: this port, and the `generate/` directory
 from [miniwinwm/RenesasEnvisionGCC](https://github.com/miniwinwm/RenesasEnvisionGCC)
